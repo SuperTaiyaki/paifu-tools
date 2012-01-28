@@ -30,7 +30,7 @@ class Player(object):
 		self.tsumo = None
 		self.melds = []
 		self.discards = [] # ordered
-		self.reach = False
+		self.reachtile = None
 	
 	def draw(self, tiles):
 		self.hand = set()
@@ -51,7 +51,7 @@ class Player(object):
 		print "Hand after: %s" % (list(self.hand).sort())
 
 	def reach(self):
-		self.reach = len(discards)
+		self.reachtile = len(self.discards)
 	
 	# stuff for calls
 
@@ -60,7 +60,7 @@ class Player(object):
 			self.hand.discard(t)
 		self.hands.append(tiles)
 
-def draw_player(canvas, player):
+def draw_player(canvas, player, position):
 	print player.hand
 	hand = list(player.hand)
 	hand.sort()
@@ -68,7 +68,7 @@ def draw_player(canvas, player):
 	print "About to redraw hand: %s" % (hand)
 	with canvas:
 		Color(0, 0.7, 0)
-		Rectangle(size=(1024,1024))
+		#Rectangle(size=(1024,1024))
 		Color(1,1,1)
 
 		# Not GL, not 2D... thoroughly fucked up. I don't think I like
@@ -77,19 +77,43 @@ def draw_player(canvas, player):
 		# Would be nice to somehow center this so that only rotation has
 		# to change for each player
 		#Translate(800, 0, 0)
-		#Rotate(90, 0, 0, 1)
-		Translate(20, 20, 0)
+
+		Scale(0.35)
+		# nfi where this number comes from, just making it work
+		Translate(1200, 900, 0)
+		# For re-centering matrices
+		Rectangle(pos=(-10, -10), size=(20, 20))
+
+		Rotate(90*position, 0, 0, 1)
+
+		PushMatrix()
+		Translate(-600, -780, 0)
 		for tile in hand:
-			Translate(40, 0, 0)
-			Rectangle(pos=(0,0), size=(40, 60),
+			Translate(80, 0, 0)
+			Rectangle(pos=(0,0), size=(80, 120),
 					source=tilelist[tile / 4])
 		if player.tsumo:
-			Rectangle(pos=(512, 512), size=(50, 70),
-				source=tilelist[player.tsumo / 4])
-			Translate(0, 60, 0)
+			Translate(-20, 110, 0)
 			Rotate(90, 0, 0, 1)
-			Rectangle(pos=(0, 0), size=(40, 60),
+			Rectangle(pos=(0, 0), size=(80, 120),
 				source=tilelist[player.tsumo / 4])
+		PopMatrix()
+		col_start = -400
+		Translate(-400, -400, 0)
+		i = 0
+		for tile in player.discards:
+			# TODO: rotated tile for riichi
+			# TODO: something about called tiles
+			Rectangle(pos=(0, 0), size=(80, 120),
+				source=tilelist[tile / 4])
+			Translate(80, 0, 0)
+			i += 1
+			if i == 6:
+				i = 0
+				Translate(-480, -120, 0)
+
+		# TODO: riichi stick
+
 		PopMatrix()
 	print "Done drawing."
 
@@ -104,14 +128,14 @@ class Game(object):
 	def deal(self, players):
 		for i in range(0,4):
 			self.players[i].draw(players[i])
-	
+
 	def draw(self, player, tile):
 		self.players[player].draw1(tile)
 	def discard(self, player, tile):
 		self.players[player].discard(tile)
 
 	def reach(self, player):
-		self.players[i].reach()
+		self.players[player].reach()
 
 	def call(self, player, tiles):
 		self.players[i].call(tiles)
@@ -194,7 +218,7 @@ class Table(Widget):
 		super(Table, self).__init__(**kwargs)
 
 		with self.canvas:
-			Color(0,0.7,0)
+			Color(0.24,0.47,0.25)
 			BindTexture(source='tile.png', index=1)
 			Rectangle(size=(1024,1024))
 		self.game_iter = run_log(sys.stdin)
@@ -202,13 +226,13 @@ class Table(Widget):
 
 	def on_touch_down(self, touch):
 		with self.canvas:
-			Color(1, 1, 1)
-			d = 30.
-			#Rectangle(pos=(touch.x - d/2, touch.y - d/2), size=(d, d),
-			#		source=tilelist[4].texture)
+			Color(0.24,0.47,0.25)
+			Rectangle(size=(1024,1024))
 		game = self.game_iter.next()
-		print game
-		draw_player(self.canvas, game.players[0])
+		draw_player(self.canvas, game.players[0], 0)
+		draw_player(self.canvas, game.players[1], 1)
+		draw_player(self.canvas, game.players[2], 2)
+		draw_player(self.canvas, game.players[3], 3)
 
 class TenhouViewer(App):
 	def build(self):
