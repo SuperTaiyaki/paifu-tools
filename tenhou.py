@@ -41,14 +41,16 @@ class Player(object):
 		self.tsumo = tile
 	
 	def discard(self, tile):
-		print "Hand before: %s" % (list(self.hand).sort())
+		print "Hand before: %s" % (list(self.hand))
 		if tile in self.hand:
 			self.hand.remove(tile)
-			self.hand.add(self.tsumo)
+			# after a call this could be None
+			if self.tsumo:
+				self.hand.add(self.tsumo)
 		# if not in the hand, it must be the tsumo
 		self.tsumo = None
 		self.discards.append(tile)
-		print "Hand after: %s" % (list(self.hand).sort())
+		print "Hand after: %s" % (list(self.hand))
 
 	def reach(self):
 		self.reachtile = len(self.discards)
@@ -58,7 +60,9 @@ class Player(object):
 	def call(self, tiles):
 		for t in tiles:
 			self.hand.discard(t)
-		self.hands.append(tiles)
+		print "Processed call, new hand: "
+		print self.hand
+		self.melds.append(tiles)
 
 def draw_player(canvas, player, position):
 	print player.hand
@@ -138,11 +142,21 @@ class Game(object):
 		self.players[player].reach()
 
 	def call(self, player, tiles):
-		self.players[i].call(tiles)
+		self.players[player].call(tiles)
 
 
 def parse_call(code):
 	# python struct only supports bytes, not bits
+	# Test call: 45577, pon west
+	#	= type 89, tile 116 + (1,2,3) (= west - so it works...)
+	# 57423 = chi, 567s (called the 7 from player to the left - player 1?)
+	#	= 0xe04f
+	#	= 0b1110000001001111
+	# 48745 = pon haku
+	# 42537 = pon east
+	# 46335 = chi 234s (called 2)
+	# 29935 = chi 345p (called 5p)
+	print "Dealing with call %d = %x" % (code, code)
 	if code & (1 << 2):
 		# chi. also matches nuki, but ignoring 3ma
 		dealer = code & 0xf
@@ -150,15 +164,34 @@ def parse_call(code):
 		tile2 = (code >> 6) & 0xf
 		tile3 = (code >> 8) & 0xf
 		base = (code >> 11) & 0x3f
+		# actual tile that got called is base % 3
+
+		print "Chi: %s %s %s" % (base + tile1, base + 4 + tile2, base + 8 +
+			tile3)
 
 		# Have to mangle base or something?
 		return (dealer, [base + tile1, base + 4 + tile2, base + 8 +
 			tile3])
-	elif code & (0x34) == 0:
+	elif code & (0x3c) == 0: # ignoring this "extended kan" thing....
+		print "Kan"
 		# kan
 		tile = code >> 8
 		dealer = code & 0xf
 		return (dealer, range(tile, tile+4))
+	elif code & 0x1C == 0x8:
+		print "Pon"
+		dealer = code & 0xf
+		unused = (code >> 5) & 0xf
+		tiles = ((code >> 9) / 3) * 4
+		# The actual tile that got called is (code >>9) % 3 (index into
+		# called, probably)
+		called = []
+		for i in range (0,4):
+			if i == unused:
+				continue
+			called.append(tiles + i)
+		return (dealer, called)
+
 	return (0, [])
 
 
