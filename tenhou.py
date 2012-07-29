@@ -2,27 +2,33 @@
 
 import sys
 from xml.dom.minidom import parse
-import kivy
-from kivy.app import App
-from kivy.uix.button import Button
-from kivy.uix.image import Image
-from kivy.uix.widget import Widget
-from kivy.graphics import RenderContext, Color, Rectangle, BindTexture, Scale, Rotate, Translate, PushMatrix, PopMatrix
-#from kivy.graphics.context_instructions import Scale, Rotate, Translate, PushMatrix, PopMatrix
 
-tilelist = []
-for x in range(0, 9):
-#        tilelist.append(Image(source="%sm.gif" % (x+1)))
-        tilelist.append("images/%sm.gif" % (x+1))
-for x in range(0, 9):
-#        tilelist.append(Image(source="%sp.gif" % (x+1)))
-        tilelist.append("images/%sp.gif" % (x+1))
-for x in range(0, 9):
-#        tilelist.append(Image(source="%ss.gif" % (x+1)))
-        tilelist.append("images/%ss.gif" % (x+1))
-for x in range(0, 8):
-#        tilelist.append(Image(source="%sz.gif" % (x+1)))
-        tilelist.append("images/%sz.gif" % (x+1))
+# Friendlier tile representation
+def tile_decode(tile):
+	tile /= 4
+	if tile < 9:
+		return "%sm" % (tile + 1)
+	elif tile < 18:
+		return "%sp" % (tile - 8)
+	elif tile < 27:
+		return "%ss" % (tile - 17)
+	elif tile == 27:
+		return "ton"
+	elif tile == 28:
+		return "nan"
+	elif tile == 29:
+		return "sha"
+	elif tile == 30:
+		return "pei"
+	elif tile == 31:
+		return "haku"
+	elif tile == 32:
+		return "hatsu"
+	elif tile == 33:
+		return "chun"
+	return "Invalid tile"
+def convert_tiles(tiles):
+	return [tile_decode(t) for t in tiles]
 
 class Player(object):
 	def __init__(self):
@@ -31,12 +37,12 @@ class Player(object):
 		self.melds = []
 		self.discards = [] # ordered
 		self.reachtile = None
-	
+
 	def draw(self, tiles):
 		self.hand = set()
 		for x in tiles:
 			self.hand.add(x)
-	
+
 	def draw1(self, tile):
 		self.tsumo = tile
 	
@@ -64,63 +70,6 @@ class Player(object):
 		print self.hand
 		self.melds.append(tiles)
 
-def draw_player(canvas, player, position):
-	print player.hand
-	hand = list(player.hand)
-	hand.sort()
-	print hand
-	print "About to redraw hand: %s" % (hand)
-	with canvas:
-		Color(0, 0.7, 0)
-		#Rectangle(size=(1024,1024))
-		Color(1,1,1)
-
-		# Not GL, not 2D... thoroughly fucked up. I don't think I like
-		# Kivy.
-		PushMatrix()
-		# Would be nice to somehow center this so that only rotation has
-		# to change for each player
-		#Translate(800, 0, 0)
-
-		Scale(0.35)
-		# nfi where this number comes from, just making it work
-		Translate(1200, 900, 0)
-		# For re-centering matrices
-		Rectangle(pos=(-10, -10), size=(20, 20))
-
-		Rotate(90*position, 0, 0, 1)
-
-		PushMatrix()
-		Translate(-600, -780, 0)
-		for tile in hand:
-			Translate(80, 0, 0)
-			Rectangle(pos=(0,0), size=(80, 120),
-					source=tilelist[tile / 4])
-		if player.tsumo:
-			Translate(-20, 110, 0)
-			Rotate(90, 0, 0, 1)
-			Rectangle(pos=(0, 0), size=(80, 120),
-				source=tilelist[player.tsumo / 4])
-		PopMatrix()
-		col_start = -400
-		Translate(-400, -400, 0)
-		i = 0
-		for tile in player.discards:
-			# TODO: rotated tile for riichi
-			# TODO: something about called tiles
-			Rectangle(pos=(0, 0), size=(80, 120),
-				source=tilelist[tile / 4])
-			Translate(80, 0, 0)
-			i += 1
-			if i == 6:
-				i = 0
-				Translate(-480, -120, 0)
-
-		# TODO: riichi stick
-
-		PopMatrix()
-	print "Done drawing."
-
 class Game(object):
 	def __init__(self):
 		self.players = [Player(), Player(), Player(), Player()]
@@ -128,7 +77,7 @@ class Game(object):
 		self.wall = []
 
 	# wall generation NYI, too complicated
-	
+
 	def deal(self, players):
 		for i in range(0,4):
 			self.players[i].draw(players[i])
@@ -159,37 +108,42 @@ def parse_call(code):
 	print "Dealing with call %d = %x" % (code, code)
 	if code & (1 << 2):
 		# chi. also matches nuki, but ignoring 3ma
-		dealer = code & 0xf
-		tile1 = (code >> 4) & 0xf
-		tile2 = (code >> 6) & 0xf
-		tile3 = (code >> 8) & 0xf
-		base = (code >> 11) & 0x3f
+		dealer = code & 0x3
+		tile1 = (code >> 3) & 0x3
+		tile2 = (code >> 5) & 0x3
+		tile3 = (code >> 7) & 0x3
+		base = (code >> 10) & 0x3f
 		# actual tile that got called is base % 3
+		# NFI what this mess is.
+		bn = (((base/3)/7)*9+((base/3)%7))*4
 
-		print "Chi: %s %s %s" % (base + tile1, base + 4 + tile2, base + 8 +
+		print "Chi: %s %s %s" % (bn + tile1, bn + 4 + tile2, bn + 8 +
 			tile3)
 
 		# Have to mangle base or something?
-		return (dealer, [base + tile1, base + 4 + tile2, base + 8 +
+		return (dealer, [bn + tile1, bn + 4 + tile2, bn + 8 +
 			tile3])
-	elif code & (0x3c) == 0: # ignoring this "extended kan" thing....
+	elif code & (0x3c) == 0: # Not complete!
 		print "Kan"
 		# kan
 		tile = code >> 8
-		dealer = code & 0xf
+		# low 2 bits indicate the called tile, but it's not important
+		tile &= ~3
+		dealer = code & 0x3
 		return (dealer, range(tile, tile+4))
-	elif code & 0x1C == 0x8:
+	elif code & 0x1C == 0x8: # 0b111 xx = 0b010 xx
 		print "Pon"
-		dealer = code & 0xf
-		unused = (code >> 5) & 0xf
-		tiles = ((code >> 9) / 3) * 4
-		# The actual tile that got called is (code >>9) % 3 (index into
-		# called, probably)
+		dealer = code & 0x3
+		unused = (code >> 5) & 0x3
+		tiles = code >> 9
+		called_tile = tiles % 3
+		base = (tiles / 3) * 4
+
 		called = []
 		for i in range (0,4):
 			if i == unused:
 				continue
-			called.append(tiles + i)
+			called.append(base + i)
 		return (dealer, called)
 
 	return (0, [])
@@ -244,34 +198,4 @@ def run_log(stream):
 		print "Yielding!"
 		yield game
 	return
-
-class Table(Widget):
-	def __init__(self, **kwargs):
-
-		super(Table, self).__init__(**kwargs)
-
-		with self.canvas:
-			Color(0.24,0.47,0.25)
-			BindTexture(source='tile.png', index=1)
-			Rectangle(size=(1024,1024))
-		self.game_iter = run_log(sys.stdin)
-		self.game_iter.next()
-
-	def on_touch_down(self, touch):
-		with self.canvas:
-			Color(0.24,0.47,0.25)
-			Rectangle(size=(1024,1024))
-		game = self.game_iter.next()
-		draw_player(self.canvas, game.players[0], 0)
-		draw_player(self.canvas, game.players[1], 1)
-		draw_player(self.canvas, game.players[2], 2)
-		draw_player(self.canvas, game.players[3], 3)
-
-class TenhouViewer(App):
-	def build(self):
-		return Table() 
-
-if __name__ == '__main__':
-	app = TenhouViewer()
-	app.run()
 
