@@ -36,7 +36,7 @@ class Player(object):
 		self.tsumo = None
 		self.melds = []
 		self.discards = [] # ordered
-		self.reachtile = None
+		self.riichitile = None
 
 	def draw(self, tiles):
 		self.hand = set()
@@ -45,7 +45,7 @@ class Player(object):
 
 	def draw1(self, tile):
 		self.tsumo = tile
-	
+
 	def discard(self, tile):
 		print "Hand before: %s" % (list(self.hand))
 		if tile in self.hand:
@@ -58,8 +58,9 @@ class Player(object):
 		self.discards.append(tile)
 		print "Hand after: %s" % (list(self.hand))
 
-	def reach(self):
-		self.reachtile = len(self.discards)
+	def riichi(self):
+		self.riichitile = len(self.discards)
+		# May need to tweak this to account for the tile being called
 	
 	# stuff for calls
 
@@ -87,8 +88,8 @@ class Game(object):
 	def discard(self, player, tile):
 		self.players[player].discard(tile)
 
-	def reach(self, player):
-		self.players[player].reach()
+	def riichi(self, player):
+		self.players[player].riichi()
 
 	def call(self, player, tiles):
 		self.players[player].call(tiles)
@@ -178,7 +179,7 @@ def run_log(stream):
 			if element.attributes['step'].value == "2":
 				continue # step 2, don't care
 			player = int(element.attributes['who'].value)
-			game.reach(player)
+			game.riichi(player)
 		elif element.nodeName[0] in draw_cmd:
 			tile = int(element.nodeName[1:])
 			player = draw_cmd.index(element.nodeName[0])
