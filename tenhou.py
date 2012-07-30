@@ -27,6 +27,7 @@ def tile_decode(tile):
 	elif tile == 33:
 		return "chun"
 	return "Invalid tile"
+
 def convert_tiles(tiles):
 	return [tile_decode(t) for t in tiles]
 
@@ -37,6 +38,7 @@ class Player(object):
 		self.melds = []
 		self.discards = [] # ordered
 		self.riichitile = None
+		self.called = set()
 
 	def draw(self, tiles):
 		self.hand = set()
@@ -59,17 +61,21 @@ class Player(object):
 		print "Hand after: %s" % (list(self.hand))
 
 	def riichi(self):
-		self.riichitile = len(self.discards)
+		self.riichitile = self.discards[-1] #len(self.discards)
 		# May need to tweak this to account for the tile being called
-	
+
 	# stuff for calls
 
-	def call(self, tiles):
-		for t in tiles:
+	def call(self, call):
+		for t in call['tiles']:
 			self.hand.discard(t)
-		print "Processed call, new hand: "
-		print self.hand
-		self.melds.append(tiles)
+		#print "Processed call, new hand: "
+		#print self.hand
+		self.melds.append(call)
+
+	# Mark the last discard as being called by someone else
+	def mark_called(self):
+		self.called.add(self.discards[-1])
 
 class Game(object):
 	def __init__(self):
@@ -77,22 +83,44 @@ class Game(object):
 
 		self.wall = []
 
+		# Basically re-interpreting the log events...
+		self.event = ''
+		self.tile = -1
+		self.player = -1
+
 	# wall generation NYI, too complicated
 
 	def deal(self, players):
 		for i in range(0,4):
 			self.players[i].draw(players[i])
+		self.event = 'deal'
+		self.tile = -1
+		self.player = -1
 
 	def draw(self, player, tile):
 		self.players[player].draw1(tile)
+		self.event = 'draw'
+		self.tile = tile
+		self.player = player
 	def discard(self, player, tile):
 		self.players[player].discard(tile)
-
+		self.event = 'discard'
+		self.tile = tile
+		self.player = player
 	def riichi(self, player):
 		self.players[player].riichi()
-
+		self.event = 'riichi'
+		self.tile = self.players[player].riichitile
+		self.player = player
 	def call(self, player, tiles):
 		self.players[player].call(tiles)
+		# The 'dealer' element of the call is relative to the caller,
+		# not the client. Push it around a bit.
+		dealer = (tiles['dealer'] + player) % 4
+		self.players[dealer].mark_called()
+		self.event = 'call' # TODO: indicate what the call is
+		self.tile = -1 # Uhh...
+		self.player = player
 
 
 def parse_call(code):
@@ -107,9 +135,10 @@ def parse_call(code):
 	# 46335 = chi 234s (called 2)
 	# 29935 = chi 345p (called 5p)
 	print "Dealing with call %d = %x" % (code, code)
+	call = {}
 	if code & (1 << 2):
 		# chi. also matches nuki, but ignoring 3ma
-		dealer = code & 0x3
+		call['dealer'] = code & 0x3
 		tile1 = (code >> 3) & 0x3
 		tile2 = (code >> 5) & 0x3
 		tile3 = (code >> 7) & 0x3
@@ -118,36 +147,35 @@ def parse_call(code):
 		# NFI what this mess is.
 		bn = (((base/3)/7)*9+((base/3)%7))*4
 
-		print "Chi: %s %s %s" % (bn + tile1, bn + 4 + tile2, bn + 8 +
+		call['tiles'] = (bn + tile1, bn + 4 + tile2, bn + 8 +
 			tile3)
+		call['called'] = base % 3
 
-		# Have to mangle base or something?
-		return (dealer, [bn + tile1, bn + 4 + tile2, bn + 8 +
-			tile3])
+		print "Chi: %s %s %s" % call['tiles']
+		return call
 	elif code & (0x3c) == 0: # Not complete!
 		print "Kan"
 		# kan
 		tile = code >> 8
-		# low 2 bits indicate the called tile, but it's not important
-		tile &= ~3
-		dealer = code & 0x3
-		return (dealer, range(tile, tile+4))
+		call['called'] = tile % 4
+		tile &= ~3 # mask out the called bits
+		call['tiles'] = range(tile, tile+4)
+		call['dealer'] = code & 0x3
 	elif code & 0x1C == 0x8: # 0b111 xx = 0b010 xx
 		print "Pon"
-		dealer = code & 0x3
-		unused = (code >> 5) & 0x3
+		call['dealer'] = code & 0x3
+		unused = (code >> 5) & 0x3 # the tile not in the meld
 		tiles = code >> 9
-		called_tile = tiles % 3
+		call['called'] = tiles % 3
 		base = (tiles / 3) * 4
 
-		called = []
+		call['tiles'] = []
 		for i in range (0,4):
 			if i == unused:
 				continue
-			called.append(base + i)
-		return (dealer, called)
-
-	return (0, [])
+			call['tiles'].append(base + i)
+	# Should put an exception here
+	return call
 
 
 draw_cmd = ['T', 'U', 'V', 'W'] # self, right, opposite, left
@@ -159,9 +187,10 @@ def run_log(stream):
 
 	gamelog = doc.firstChild # mjloggm
 	game = None
+	riichi = False
 	for element in gamelog.childNodes:
-		print "Node: " + element.nodeName
-		print "Value: " + str(element.nodeValue)
+		#print "Node: " + element.nodeName
+		#print "Value: " + str(element.nodeValue)
 
 		if element.nodeName in ignore_cmd:
 			continue
@@ -176,10 +205,15 @@ def run_log(stream):
 			print "HANDS STARTED: %s" % (hands)
 			game.deal(hands)
 		elif element.nodeName == 'REACH':
-			if element.attributes['step'].value == "2":
-				continue # step 2, don't care
+			if element.attributes['step'].value == "1":
+				# Consume the next element without yielding, so
+				# the discard doesn't get shown right without
+				# being rotated
+				riichi = True
+				continue
 			player = int(element.attributes['who'].value)
 			game.riichi(player)
+			print "RIICHI!"
 		elif element.nodeName[0] in draw_cmd:
 			tile = int(element.nodeName[1:])
 			player = draw_cmd.index(element.nodeName[0])
@@ -193,10 +227,14 @@ def run_log(stream):
 		elif element.nodeName[0] == 'N':
 			player = int(element.attributes['who'].value)
 			code =  int(element.attributes['m'].value)
-			(dealer, tiles) = parse_call(code)
-			game.call(player, tiles)
+			game.call(player, parse_call(code))
 
-		print "Yielding!"
-		yield game
+		# Hrm, this may require some adjustment... if a player sets up a
+		# riichi and the discard is ronned or called it may not show
+		# right
+		if not riichi:
+			yield game
+		else:
+			riichi = False
 	return
 

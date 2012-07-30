@@ -29,6 +29,8 @@ show_call(4391)
 # west pon west from east
 show_call(45642)
 
+# ankan 8p
+show_call(16896)
 
 # Unknown calls, taken from mygame.log
 #for call in [46335, 29935, 26633, 45577, 57423]:

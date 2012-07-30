@@ -7,7 +7,6 @@ from kivy.graphics import RenderContext, Color, Rectangle, BindTexture, Scale, R
 from tenhou import *
 #from kivy.graphics.context_instructions import Scale, Rotate, Translate, PushMatrix, PopMatrix
 
-
 tilelist = []
 for x in range(0, 9):
 #        tilelist.append(Image(source="%sm.gif" % (x+1)))
@@ -22,11 +21,36 @@ for x in range(0, 8):
 #        tilelist.append(Image(source="%sz.gif" % (x+1)))
         tilelist.append("images/%sz.gif" % (x+1))
 
+def draw_tile(tile, rotated = False):
+	if rotated:
+		Rotate(90, 0, 0, 1)
+		# no idea why pos isn't 80 or 120
+		Rectangle(pos=(0,-100), size=(80, 120),
+				source=tilelist[tile / 4])
+		Rotate(-90, 0, 0, 1)
+		Translate(120, 0, 0)
+	else:
+		Rectangle(pos=(0,0), size=(80, 120),
+			source=tilelist[tile / 4])
+		Translate(80, 0, 0)
+
+def draw_call(call):
+	# first element of the array is the called tile
+	idx = 3 # Yes, backwards
+	for tile in call['tiles']:
+		# Will require some adjustment for kans, since dealer=right gets
+		# placed on the edge, not the 3rd tile
+		if idx == call['dealer']:
+			# Draw sideways
+			draw_tile(tile, True)
+		else:
+			draw_tile(tile)
+		idx -= 1
+	Color(1,1,1)
+
 def draw_player(canvas, player, position):
-	print player.hand
 	hand = list(player.hand)
 	hand.sort()
-	print hand
 	print "About to redraw hand: %s" % (hand)
 	with canvas:
 		Color(0, 0.7, 0)
@@ -51,24 +75,21 @@ def draw_player(canvas, player, position):
 		PushMatrix()
 		Translate(-600, -780, 0)
 		for tile in hand:
-			Translate(80, 0, 0)
-			Rectangle(pos=(0,0), size=(80, 120),
-					source=tilelist[tile / 4])
+			draw_tile(tile)
+
 		if player.tsumo:
 			PushMatrix()
-			Translate(-20, 110, 0)
-			Rotate(90, 0, 0, 1)
-			Rectangle(pos=(0, 0), size=(80, 120),
-				source=tilelist[player.tsumo / 4])
+			Translate(-120, 100, 0)
+			draw_tile(player.tsumo, True)
 			PopMatrix()
 
+		# Should really be called calls
+		# Should also be anchored to the right so it doesn't move with
+		# the hand
 		for meld in player.melds:
-			Translate(30, 0, 0)
+			Translate(150, 0, 0)
+			draw_call(meld)
 			print meld
-			for tile in meld:
-				Translate(80, 0, 0)
-				Rectangle(pos=(0,0), size=(80, 120),
-						source=tilelist[tile / 4])
 
 		PopMatrix()
 		col_start = -400
@@ -76,10 +97,12 @@ def draw_player(canvas, player, position):
 		i = 0
 		for tile in player.discards:
 			# TODO: rotated tile for riichi
-			# TODO: something about called tiles
-			Rectangle(pos=(0, 0), size=(80, 120),
-				source=tilelist[tile / 4])
-			Translate(80, 0, 0)
+			if tile in player.called:
+				Color(0.5, 0.5, 0.5)
+			else:
+				Color(1, 1, 1)
+			rotated = (tile == player.riichitile)
+			draw_tile(tile, rotated)
 			i += 1
 			if i == 6:
 				i = 0
@@ -88,7 +111,7 @@ def draw_player(canvas, player, position):
 		# TODO: riichi stick
 
 		PopMatrix()
-	print "Done drawing."
+	#print "Done drawing."
 
 
 class Table(Widget):
@@ -112,6 +135,10 @@ class Table(Widget):
 		draw_player(self.canvas, game.players[1], 1)
 		draw_player(self.canvas, game.players[2], 2)
 		draw_player(self.canvas, game.players[3], 3)
+
+		# If there's a call to notify, draw it on the screen too
+		#if game.event == 'riichi':
+
 
 class TenhouViewer(App):
 	def build(self):
