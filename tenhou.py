@@ -6,6 +6,8 @@ from xml.dom.minidom import parse
 # Friendlier tile representation
 def tile_decode(tile):
 	tile /= 4
+	if tile < 0:
+		return 'error'
 	if tile < 9:
 		return "%sm" % (tile + 1)
 	elif tile < 18:
@@ -31,6 +33,68 @@ def tile_decode(tile):
 def convert_tiles(tiles):
 	return [tile_decode(t) for t in tiles]
 
+# Take out all complete mentsu
+def reduce(tiles):
+	tc = [0] * 34
+	mentsu = 0
+	for tile in tiles:
+		tc[tile] += 1
+	for i in range(28, 34): # honours first, all koutsu
+		if tc[i] >= 3:
+			tc[i] -= 3
+			mentsu += 1
+
+	# Cut out the shuntsu
+	for base in [0, 9, 18]:
+		for inc in range(7):
+			if all([tc[base+inc+i] for i in range(3)]):
+				tc[base+inc] -= 1
+				tc[base+inc+1] -= 1
+				tc[base+inc+2] -= 1
+
+	# convert the remainder back to the original representation
+	output = []
+	for tile, count in enumerate(tc):
+		output.extend([tile] * count)
+	return output
+
+def chiitoitsu(tiles):
+	sorted = tiles.sort()
+	# Assuming they don't have to be distinct pairs. TODO: confirm for
+	# Tenhou
+	return all((sorted[i*2] == sorted[i*2+1] for i in range(7)))
+
+def kokushi(tiles):
+	terminals = set(0,8,9,17,18,26,27,28,29,30,31,32,33)
+	hand = set(tiles)
+	remainder = terminals - hand
+	# TODO: NYI
+	return False
+
+def agari(hand):
+	remain = reduce(hand)
+	# only a pain left over
+	if remain[0] == remain[1]:
+		return True
+	elif chiitotsu(hand) or kokushi(hand):
+		return True
+	return False
+
+def shanten(hand):
+	# ignoring chiitoitsu for now
+	suits = [[],[],[],[]]
+	for tile in hand:
+		if tile < 9*4:
+			suits[0].append(tile)
+		elif tile < 18*4:
+			suits[1].append(tile)
+		elif tile < 27*4:
+			suits[2].append(tile)
+		else:
+			suits[3].append(tile)
+
+
+
 class Player(object):
 	def __init__(self):
 		self.hand = set() # implicit ordering?
@@ -49,7 +113,7 @@ class Player(object):
 		self.tsumo = tile
 
 	def discard(self, tile):
-		print "Hand before: %s" % (list(self.hand))
+		#print "Hand before: %s" % (map(tile_decode,list(self.hand)))
 		if tile in self.hand:
 			self.hand.remove(tile)
 			# after a call this could be None
@@ -58,7 +122,7 @@ class Player(object):
 		# if not in the hand, it must be the tsumo
 		self.tsumo = None
 		self.discards.append(tile)
-		print "Hand after: %s" % (list(self.hand))
+		#print "Hand after: %s" % (map(tile_decode,list(self.hand)))
 
 	def riichi(self):
 		self.riichitile = self.discards[-1] #len(self.discards)
@@ -96,7 +160,6 @@ class Game(object):
 		self.event = 'deal'
 		self.tile = -1
 		self.player = -1
-
 	def draw(self, player, tile):
 		self.players[player].draw1(tile)
 		self.event = 'draw'
@@ -112,16 +175,22 @@ class Game(object):
 		self.event = 'riichi'
 		self.tile = self.players[player].riichitile
 		self.player = player
-	def call(self, player, tiles):
-		self.players[player].call(tiles)
+	def call(self, player, data):
+		self.players[player].call(data)
 		# The 'dealer' element of the call is relative to the caller,
 		# not the client. Push it around a bit.
-		dealer = (tiles['dealer'] + player) % 4
+		dealer = (data['dealer'] + player) % 4
 		self.players[dealer].mark_called()
-		self.event = 'call' # TODO: indicate what the call is
-		self.tile = -1 # Uhh...
+		#self.event = 'call' # TODO: indicate what the call is
+		self.event = data['type']
+		self.tile = data['tiles'][data['called']]
 		self.player = player
-
+	# Set up arbitrary events for things like ryuukyoku that don't change
+	# the game state
+	def set_event(self, event, player = -1, tile = -1):
+		self.event = event
+		self.tile = tile
+		self.player = player
 
 def parse_call(code):
 	# python struct only supports bytes, not bits
@@ -150,6 +219,7 @@ def parse_call(code):
 		call['tiles'] = (bn + tile1, bn + 4 + tile2, bn + 8 +
 			tile3)
 		call['called'] = base % 3
+		call['type'] = 'chi'
 
 		print "Chi: %s %s %s" % call['tiles']
 		return call
@@ -161,6 +231,7 @@ def parse_call(code):
 		tile &= ~3 # mask out the called bits
 		call['tiles'] = range(tile, tile+4)
 		call['dealer'] = code & 0x3
+		call['type'] = 'kan'
 	elif code & 0x1C == 0x8: # 0b111 xx = 0b010 xx
 		print "Pon"
 		call['dealer'] = code & 0x3
@@ -174,6 +245,7 @@ def parse_call(code):
 			if i == unused:
 				continue
 			call['tiles'].append(base + i)
+		call['type'] = 'pon'
 	# Should put an exception here
 	return call
 
@@ -181,6 +253,7 @@ def parse_call(code):
 draw_cmd = ['T', 'U', 'V', 'W'] # self, right, opposite, left
 discard_cmd = ['D', 'E', 'F', 'G']
 ignore_cmd = ['SHUFFLE', 'GO', 'TAIKYOKU', 'UN', '#text'] # #text is a weird xml thing?
+
 
 def run_log(stream):
 	doc = parse(stream)
@@ -209,20 +282,30 @@ def run_log(stream):
 				# Consume the next element without yielding, so
 				# the discard doesn't get shown right without
 				# being rotated
+				# TODO: this may cause the riichi discard event
+				# to get eaten, which breaks the paifu
 				riichi = True
 				continue
 			player = int(element.attributes['who'].value)
 			game.riichi(player)
 			print "RIICHI!"
+		elif element.nodeName == 'AGARI':
+			game.set_event('agari',
+					int(element.attributes['who'].value))
+			# Need to store the data for this somewhere useful
+		elif element.nodeName == 'RYUUKYOKU':
+			game.event('ryuukyoku')
+			# identity of the person is in the absence/presence of
+			# hai* values
 		elif element.nodeName[0] in draw_cmd:
 			tile = int(element.nodeName[1:])
 			player = draw_cmd.index(element.nodeName[0])
-			print "%s draw" % player
+			print "%s draw %s" % (player, tile_decode(tile))
 			game.draw(player, tile)
 		elif element.nodeName[0] in discard_cmd:
 			tile = int(element.nodeName[1:])
 			player = discard_cmd.index(element.nodeName[0])
-			print "%s discard" % player
+			print "%s discard %s" % (player, tile_decode(tile))
 			game.discard(player, tile)
 		elif element.nodeName[0] == 'N':
 			player = int(element.attributes['who'].value)
