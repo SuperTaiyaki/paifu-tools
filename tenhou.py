@@ -100,7 +100,8 @@ def _agari(tiles):
 	if max(tiles) == 0:
 		return False
 	# If there's only a pair left, we're done
-	if len([x for x in tiles if x == 2]) == 1:
+	# This is kind of inelegant
+	if len([x for x in tiles if x == 2]) == 1 and sum(tiles) == 2:
 		return True
 
 	iter = _reduce_koutsu(tiles)
