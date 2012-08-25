@@ -35,19 +35,23 @@ def convert_tiles(tiles):
 
 # Take out all complete mentsu
 def reduce(tiles):
+	# transform to tiles[tile #] = (count of tile)
 	tc = [0] * 34
 	mentsu = 0
 	for tile in tiles:
 		tc[tile] += 1
+
 	for i in range(28, 34): # honours first, all koutsu
 		if tc[i] >= 3:
 			tc[i] -= 3
 			mentsu += 1
 
+	# Cut out the rest of the koutsu
+
 	# Cut out the shuntsu
 	for base in [0, 9, 18]:
 		for inc in range(7):
-			if all([tc[base+inc+i] for i in range(3)]):
+			while all([tc[base+inc+i] for i in range(3)]):
 				tc[base+inc] -= 1
 				tc[base+inc+1] -= 1
 				tc[base+inc+2] -= 1
@@ -59,26 +63,39 @@ def reduce(tiles):
 	return output
 
 def chiitoitsu(tiles):
+	if len(tiles) < 14:
+		return False
 	sorted = tiles.sort()
 	# Assuming they don't have to be distinct pairs. TODO: confirm for
 	# Tenhou
-	return all((sorted[i*2] == sorted[i*2+1] for i in range(7)))
+	return all((sorted[i] == sorted[i + 1] for i in range(0,14,2)))
 
 def kokushi(tiles):
-	terminals = set(0,8,9,17,18,26,27,28,29,30,31,32,33)
+	terminals = set([0,8,9,17,18,26,27,28,29,30,31,32,33])
 	hand = set(tiles)
 	remainder = terminals - hand
 	# TODO: NYI
 	return False
 
+# tiles 0-34, not 0-136
 def agari(hand):
 	remain = reduce(hand)
-	# only a pain left over
-	if remain[0] == remain[1]:
+	# only a pair left over
+	if len(remain) == 2 and remain[0] == remain[1]:
 		return True
-	elif chiitotsu(hand) or kokushi(hand):
+	elif chiitoitsu(hand) or kokushi(hand):
 		return True
 	return False
+
+# Brute force-ish method, try each tile and see if it completes the hand
+# This ignores tiles that are impossible (i.e. held in a kan or by opponents)
+def agari_tiles(hand):
+	outs = []
+	for tile in range(34):
+		if agari(hand + [tile]):
+			outs.append(tile)
+	return outs
+
 
 def shanten(hand):
 	# ignoring chiitoitsu for now
