@@ -1,6 +1,7 @@
 
-
+import copy
 import sys
+import itertools
 from xml.dom.minidom import parse
 
 # Friendlier tile representation
@@ -63,12 +64,12 @@ def reduce(tiles):
 	return output
 
 def chiitoitsu(tiles):
-	if len(tiles) < 14:
+	if len(tiles) != 14:
 		return False
-	sorted = tiles.sort()
+	s = sorted(tiles)
 	# Assuming they don't have to be distinct pairs. TODO: confirm for
 	# Tenhou
-	return all((sorted[i] == sorted[i + 1] for i in range(0,14,2)))
+	return all((s[i] == s[i + 1] for i in range(0,14,2)))
 
 def kokushi(tiles):
 	terminals = set([0,8,9,17,18,26,27,28,29,30,31,32,33])
@@ -77,15 +78,51 @@ def kokushi(tiles):
 	# TODO: NYI
 	return False
 
-# tiles 0-34, not 0-136
-def agari(hand):
-	remain = reduce(hand)
-	# only a pair left over
-	if len(remain) == 2 and remain[0] == remain[1]:
+def _reduce_koutsu(tiles):
+	for tile in range(len(tiles)):
+		if tiles[tile] >= 3:
+			out = copy.copy(tiles)
+			out[tile] -= 3
+			yield out
+
+def _reduce_mentsu(tiles):
+	for base in [0, 9, 18]:
+		for inc in range(7):
+			if all([tiles[base+inc+i] for i in [0,1,2]]):
+				out = copy.copy(tiles)
+				out[base+inc] -= 1
+				out[base+inc+1] -= 1
+				out[base+inc+2] -= 1
+				yield out
+
+def _agari(tiles):
+	# No tiles left
+	if max(tiles) == 0:
+		return False
+	# If there's only a pair left, we're done
+	if len([x for x in tiles if x == 2]) == 1:
 		return True
-	elif chiitoitsu(hand) or kokushi(hand):
+
+	iter = _reduce_koutsu(tiles)
+	if any((_agari(hand) for hand in iter)):
+		return True
+	iter = _reduce_mentsu(tiles)
+	if any((_agari(hand) for hand in iter)):
 		return True
 	return False
+
+# tiles 0-34, not 0-136
+def agari(hand):
+	# chiitoitsu, kokushi
+	if len(hand) == 14:
+		if chiitoitsu(hand) or kokushi(hand):
+			return True
+
+	tc = [0] * 34
+	mentsu = 0
+	for tile in hand:
+		tc[tile] += 1
+	return _agari(tc)
 
 # Brute force-ish method, try each tile and see if it completes the hand
 # This ignores tiles that are impossible (i.e. held in a kan or by opponents)
