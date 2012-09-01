@@ -244,6 +244,7 @@ class Game(object):
 		# The 'dealer' element of the call is relative to the caller,
 		# not the client. Push it around a bit.
 		dealer = (data['dealer'] + player) % 4
+		data['dealer'] = dealer # the relative value isn't useful
 		self.players[dealer].mark_called()
 		#self.event = 'call' # TODO: indicate what the call is
 		self.event = data['type']
@@ -273,17 +274,21 @@ def parse_call(code):
 	if code & (1 << 2):
 		# chi. also matches nuki, but ignoring 3ma
 		call['dealer'] = code & 0x3
-		tile1 = (code >> 3) & 0x3
-		tile2 = (code >> 5) & 0x3
-		tile3 = (code >> 7) & 0x3
 		base = (code >> 10) & 0x3f
-		# actual tile that got called is base % 3
-		# NFI what this mess is.
 		bn = (((base/3)/7)*9+((base/3)%7))*4
-
-		call['tiles'] = (bn + tile1, bn + 4 + tile2, bn + 8 +
-			tile3)
+		tile1 = (code >> 3) & 0x3
+		tile2 = ((code >> 5) & 0x3) + 4
+		tile3 = ((code >> 7) & 0x3) + 8
+		# actual tile that got called is base % 3
 		call['called'] = base % 3
+		# Order so that the called tile is at the front
+		if call['called'] == 0:
+			call['tiles'] = (bn + tile1, bn + tile2, bn + tile3)
+		elif call['called'] == 1:
+			call['tiles'] = (bn + tile2, bn + tile1, bn + tile3)
+		elif call['called'] == 2:
+			call['tiles'] = (bn + tile3, bn + tile1, bn + tile2)
+
 		call['type'] = 'chi'
 
 		debug("Chi: %s %s %s" % call['tiles'])
@@ -299,7 +304,7 @@ def parse_call(code):
 		call['type'] = 'kan'
 	elif code & 0x1C == 0x8: # 0b111 xx = 0b010 xx
 		debug("Pon")
-		call['dealer'] = code & 0x3
+		call['dealer'] = code & 0x3 # this is _relative to the caller_
 		unused = (code >> 5) & 0x3 # the tile not in the meld
 		tiles = code >> 9
 		call['called'] = tiles % 3

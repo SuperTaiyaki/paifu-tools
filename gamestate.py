@@ -75,6 +75,7 @@ def write_tile(tile, variant = ''):
 
 # Top of the screen, show toimen first
 out.write("<div id='toimen_hand'>\n")
+# Calls not implemented yet since the test hand doesn't have any
 for tile in reversed(hands[2]):
 	#write_tile((tile,), 'u')
 	# This is annoying. Any space between the <img> tags spaces the images
@@ -88,6 +89,21 @@ for tile in hands[3]:
 	#write_tile((tile,), 'l')
 	out.write("<img src='images/backl.gif' />")
 	out.write("<br />\n")
+
+# kamicha calls... calls are tile is 2, 1, 0
+# first tile is the one that was called, push it to the right place in the list
+kamicha_called = [2,1,0]
+# reversed because calls go outside to inside
+for call in reversed(calls[3]):
+	print call
+	out.write("<br />\n")
+	for idx, tile in enumerate(call['tiles']):
+		orientation = 'l'
+		if idx == kamicha_called[call['dealer']]:
+			orientation = ''
+		write_tile((tile,), orientation)
+		out.write("<br />\n")
+
 out.write("</div>")
 
 # In the middle, div for all the discards
@@ -150,7 +166,6 @@ kawa = discards[0]
 out.write("<div id='own_kawa'>\n")
 riichi_tile = riichi[0]
 for i, tile in enumerate(kawa):
-	print i
 	orientation = ''
 	if i == riichi_tile:
 		orientation = 'r'
@@ -183,6 +198,19 @@ out.write("</table></div>\n") # shimocha_discards
 
 # Another hand
 out.write("<div id='shimocha_hand'>\n")
+# [dealer number] -> tile position
+shimocha_called = [2,0,0,1] # [1] is only used for kans
+for call in calls[1]:
+	print call
+	for idx, tile in enumerate(reversed(call['tiles'])):
+		orientation = 'r'
+		if idx == shimocha_called[call['dealer']]:
+			orientation = 'u'
+		write_tile((tile,), orientation)
+		out.write("<br />")
+
+	out.write("<br />")
+
 for tile in reversed(hands[1]):
 	#out.write("<img src='%sr.gif' /><br />\n" % tilelist[tile / 4])
 	out.write("<img src='images/backl.gif' /><br />\n")
@@ -203,6 +231,7 @@ for i, tile in enumerate(hands[0]):
 	#out.write("<img src='%s.gif' />\n" % tilelist[tile / 4])
 out.write("<input type='submit' name='submit' value='Submit' />\n")
 out.write("</div>") # row
+# Insert called tiles around here
 out.write("</div>\n") # own_hand
 out.write("</form>\n")
 

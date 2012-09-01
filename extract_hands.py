@@ -15,7 +15,8 @@ for state in game:
         # Players need to be rearranged so that 0 is the one who dealt
         # in
         player_order = [(x + state.data['dealer']) % 4 for x in range(4)]
-        winner = (state.player - state.data['dealer']) % 4
+        order_inverse = [(x - state.data['dealer']) % 4 for x in range(4)]
+        winner = order_inverse[state.player]
         hands = []
         discards = []
         melds = []
@@ -25,7 +26,12 @@ for state in game:
             player = state.players[p]
             hands.append(sorted(list(player.hand)))
             discards.append(player.discards)
-            melds.append(player.melds) #need to remap some numbers in here
+            p_melds = []
+            for meld in player.melds:
+                p_melds.append({'tiles': meld['tiles'],
+                    'type': meld['type'],
+                    'dealer': order_inverse[meld['dealer']]})
+            melds.append(p_melds) #need to remap some numbers in here
 
             if player.riichitile in player.discards:
                 riichi.append(player.discards.index(player.riichitile))

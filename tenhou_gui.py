@@ -36,7 +36,8 @@ def draw_tile(tile, rotated = False):
 
 def draw_call(call):
 	# first element of the array is the called tile
-	idx = 3 # Yes, backwards
+        # TODO: this is putting the rotated tile in the entirely wrong place
+	idx = 0 # Yes, backwards
 	for tile in call['tiles']:
 		# Will require some adjustment for kans, since dealer=right gets
 		# placed on the edge, not the 3rd tile
@@ -45,7 +46,7 @@ def draw_call(call):
 			draw_tile(tile, True)
 		else:
 			draw_tile(tile)
-		idx -= 1
+		idx += 1
 	Color(1,1,1)
 
 def draw_player(canvas, player, position):
@@ -121,7 +122,6 @@ class Table(Widget):
 
 		with self.canvas:
 			Color(0.24,0.47,0.25)
-			BindTexture(source='tile.png', index=1)
 			Rectangle(size=(1024,1024))
 		self.game_iter = run_log(sys.stdin)
 		self.game_iter.next()

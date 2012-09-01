@@ -1,5 +1,4 @@
 import sys
-import fileinput
 
 # Input needs to be a full log spec - 2012072820gm-0009-0000-x33591c066f4f
 
