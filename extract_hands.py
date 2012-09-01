@@ -4,9 +4,11 @@
 import tenhou
 import sys
 import json
+import time
+
+id = int(time.time() * 1000)
 
 game = tenhou.run_log(sys.stdin)
-
 for state in game:
     if state.event == 'agari':
         if state.data['dealer'] == state.player:
@@ -38,6 +40,17 @@ for state in game:
             else:
                 riichi.append(-1)
 
+        # This state is captured just after the player dealt in - load the tile
+        # back into the hand
+        player = order_inverse[state.data['dealer']]
+        tile = discards[player].pop()
+        hands[player].append(tile)
+
         waits = tenhou.agari_tiles([x/4 for x in hands[winner]])
-        print json.dumps({'hands': hands, 'discards': discards, 'melds': melds,
-            'riichi': riichi, 'waits': waits})
+
+        f = open("hand%08d" % id, "w")
+        json.dump({'hands': hands, 'discards': discards, 'melds': melds,
+            'riichi': riichi, 'waits': waits, 'player':
+            order_inverse[state.player]}, f)
+        f.close()
+        id += 1
