@@ -45,6 +45,7 @@ for state in game:
         player = order_inverse[state.data['dealer']]
         tile = discards[player].pop()
         hands[player].append(tile)
+        hands[player].sort() # Don't let the hot tile sit at the end!
 
         waits = tenhou.agari_tiles([x/4 for x in hands[winner]])
 

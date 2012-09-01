@@ -272,7 +272,7 @@ out.write("<input type='hidden' name='hand' value='%s'></input>\n" % hand_id)
 out.write("<input type='hidden' name='score' value='%d'></input>" % score)
 out.write("<div id='own_hand'>\n")
 out.write("<div class='row'>\n")
-for i, tile in enumerate(hands[0]):
+for i, tile in enumerate(sorted(hands[0])):
 	classes = []
 	if validating and 'tile_%d' % tile not in form:
 		classes.append('unselected')
@@ -287,7 +287,7 @@ for i, tile in enumerate(hands[0]):
 			% (i, append, tilelist[tile / 4]))
 out.write("</div><div class='row'>\n")
 if not validating:
-	for i, tile in enumerate(hands[0]):
+	for i, tile in enumerate(sorted(hands[0])):
 		out.write("<span><input name='tile_%d' id='tile_%d' type='checkbox' /></span>\n" % (tile, i))
 	out.write("<input type='submit' name='submit' value='Submit' />\n")
 
@@ -336,6 +336,6 @@ if validating:
 	out.write("<input type='hidden' name='score' value='%d'></input>" % score)
 	out.write("<input type='submit' name='next' value='Next hand'></input>\n")
 	out.write("</form></div>\n")
-out.write("</html>\n")
+out.write("<p style='clear: left;'><br />Hand ID: %s</p></html>\n" % hand_id)
 out.close()
 

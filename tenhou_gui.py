@@ -52,7 +52,7 @@ def draw_call(call):
 def draw_player(canvas, player, position):
 	hand = list(player.hand)
 	hand.sort()
-	print "About to redraw hand: %s" % (hand)
+	#print "About to redraw hand: %s" % (hand)
 	with canvas:
 		Color(0, 0.7, 0)
 		#Rectangle(size=(1024,1024))

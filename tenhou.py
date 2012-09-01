@@ -4,8 +4,8 @@ import sys
 import itertools
 from xml.dom.minidom import parse
 
-def debug(*args):
-	#print(*args)
+def debug(args):
+	#print(args)
 	pass
 
 # Friendlier tile representation
@@ -173,19 +173,19 @@ class Player(object):
 
 	def draw1(self, tile):
 		self.tsumo = tile
-		self.draws.append(tile)
 
 	def discard(self, tile):
-		#debugt "Hand before: %s" % (map(tile_decode,list(self.hand)))
+		debug("Hand before: %s" % (map(tile_decode,list(self.hand))))
 		if tile in self.hand:
 			self.hand.remove(tile)
 			# after a call this could be None
-			if self.tsumo:
+			# 1m is 0, don't let this fail
+			if self.tsumo is not None:
 				self.hand.add(self.tsumo)
 		# if not in the hand, it must be the tsumo
 		self.tsumo = None
 		self.discards.append(tile)
-		#debug("Hand after: %s" % (map(tile_decode,list(self.hand))))
+		debug("Hand after: %s" % (map(tile_decode,list(self.hand))))
 
 	def riichi(self):
 		self.riichitile = self.discards[-1] #len(self.discards)
