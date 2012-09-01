@@ -4,6 +4,10 @@ import sys
 import itertools
 from xml.dom.minidom import parse
 
+def debug(*args):
+	#print(*args)
+	pass
+
 # Friendlier tile representation
 def tile_decode(tile):
 	tile /= 4
@@ -127,6 +131,8 @@ def agari(hand):
 
 # Brute force-ish method, try each tile and see if it completes the hand
 # This ignores tiles that are impossible (i.e. held in a kan or by opponents)
+# Could possibly be optimized by ignoring empty suits, but that requires some
+# trickery to catch kokushi
 def agari_tiles(hand):
 	outs = []
 	for tile in range(34):
@@ -155,6 +161,7 @@ class Player(object):
 		self.hand = set() # implicit ordering?
 		self.tsumo = None
 		self.melds = []
+		self.draws = []
 		self.discards = [] # ordered
 		self.riichitile = None
 		self.called = set()
@@ -166,9 +173,10 @@ class Player(object):
 
 	def draw1(self, tile):
 		self.tsumo = tile
+		self.draws.append(tile)
 
 	def discard(self, tile):
-		#print "Hand before: %s" % (map(tile_decode,list(self.hand)))
+		#debugt "Hand before: %s" % (map(tile_decode,list(self.hand)))
 		if tile in self.hand:
 			self.hand.remove(tile)
 			# after a call this could be None
@@ -177,7 +185,7 @@ class Player(object):
 		# if not in the hand, it must be the tsumo
 		self.tsumo = None
 		self.discards.append(tile)
-		#print "Hand after: %s" % (map(tile_decode,list(self.hand)))
+		#debug("Hand after: %s" % (map(tile_decode,list(self.hand))))
 
 	def riichi(self):
 		self.riichitile = self.discards[-1] #len(self.discards)
@@ -188,8 +196,8 @@ class Player(object):
 	def call(self, call):
 		for t in call['tiles']:
 			self.hand.discard(t)
-		#print "Processed call, new hand: "
-		#print self.hand
+		#debug("Processed call, new hand: ")
+		#debug(self.hand)
 		self.melds.append(call)
 
 	# Mark the last discard as being called by someone else
@@ -206,6 +214,7 @@ class Game(object):
 		self.event = ''
 		self.tile = -1
 		self.player = -1
+		self.data = {} # Miscellaneous crap holding for events
 
 	# wall generation NYI, too complicated
 
@@ -242,10 +251,11 @@ class Game(object):
 		self.player = player
 	# Set up arbitrary events for things like ryuukyoku that don't change
 	# the game state
-	def set_event(self, event, player = -1, tile = -1):
+	def set_event(self, event, player = -1, tile = -1, other = {}):
 		self.event = event
 		self.tile = tile
 		self.player = player
+		self.data = other
 
 def parse_call(code):
 	# python struct only supports bytes, not bits
@@ -258,7 +268,7 @@ def parse_call(code):
 	# 42537 = pon east
 	# 46335 = chi 234s (called 2)
 	# 29935 = chi 345p (called 5p)
-	print "Dealing with call %d = %x" % (code, code)
+	debug("Dealing with call %d = %x" % (code, code))
 	call = {}
 	if code & (1 << 2):
 		# chi. also matches nuki, but ignoring 3ma
@@ -276,10 +286,10 @@ def parse_call(code):
 		call['called'] = base % 3
 		call['type'] = 'chi'
 
-		print "Chi: %s %s %s" % call['tiles']
+		debug("Chi: %s %s %s" % call['tiles'])
 		return call
 	elif code & (0x3c) == 0: # Not complete!
-		print "Kan"
+		debug("Kan")
 		# kan
 		tile = code >> 8
 		call['called'] = tile % 4
@@ -288,7 +298,7 @@ def parse_call(code):
 		call['dealer'] = code & 0x3
 		call['type'] = 'kan'
 	elif code & 0x1C == 0x8: # 0b111 xx = 0b010 xx
-		print "Pon"
+		debug("Pon")
 		call['dealer'] = code & 0x3
 		unused = (code >> 5) & 0x3 # the tile not in the meld
 		tiles = code >> 9
@@ -317,8 +327,8 @@ def run_log(stream):
 	game = None
 	riichi = False
 	for element in gamelog.childNodes:
-		#print "Node: " + element.nodeName
-		#print "Value: " + str(element.nodeValue)
+		#debug("Node: " + element.nodeName)
+		#debug("Value: " + str(element.nodeValue))
 
 		if element.nodeName in ignore_cmd:
 			continue
@@ -330,8 +340,10 @@ def run_log(stream):
 				tiles = hand.split(",")
 				tiles = [int(x) for x in tiles]
 				hands.append(tiles)
-			print "HANDS STARTED: %s" % (hands)
+			debug("HANDS STARTED: %s" % (hands))
 			game.deal(hands)
+		if element.nodeName == 'DORA':
+			continue # so this doesn't get confused with a discard
 		elif element.nodeName == 'REACH':
 			if element.attributes['step'].value == "1":
 				# Consume the next element without yielding, so
@@ -343,24 +355,32 @@ def run_log(stream):
 				continue
 			player = int(element.attributes['who'].value)
 			game.riichi(player)
-			print "RIICHI!"
+			debug("RIICHI!")
 		elif element.nodeName == 'AGARI':
+			# Might be worth checking that hai matches the state
+			# data
+			
+			data = {'yaku': element.attributes['yaku'].value,
+				'dealer':
+				int(element.attributes['fromWho'].value)}
 			game.set_event('agari',
-					int(element.attributes['who'].value))
+					int(element.attributes['who'].value),
+					int(element.attributes['machi'].value),
+					data)
 			# Need to store the data for this somewhere useful
 		elif element.nodeName == 'RYUUKYOKU':
-			game.event('ryuukyoku')
+			game.set_event('ryuukyoku')
 			# identity of the person is in the absence/presence of
 			# hai* values
 		elif element.nodeName[0] in draw_cmd:
 			tile = int(element.nodeName[1:])
 			player = draw_cmd.index(element.nodeName[0])
-			print "%s draw %s" % (player, tile_decode(tile))
+			debug("%s draw %s" % (player, tile_decode(tile)))
 			game.draw(player, tile)
 		elif element.nodeName[0] in discard_cmd:
 			tile = int(element.nodeName[1:])
 			player = discard_cmd.index(element.nodeName[0])
-			print "%s discard %s" % (player, tile_decode(tile))
+			debug("%s discard %s" % (player, tile_decode(tile)))
 			game.discard(player, tile)
 		elif element.nodeName[0] == 'N':
 			player = int(element.attributes['who'].value)

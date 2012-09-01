@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 import os
+import json
+import sys
 
 # Lifted from paifu and probably gui
 tilelist = []
@@ -18,26 +20,35 @@ for x in range(0, 8):
 # Junk data for now...
 # Hands ordered as in tenhou data - self, right, across, left
 # (tile, tsumokiri?)
+f = open(sys.argv[1])
+data = json.load(f)
+print data
 hands = [[10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
 	[30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42],
 	[50, 55, 52, 53, 54, 55, 56, 57, 58, 59, 60, 65, 62],
 	[70, 77, 72, 73, 74, 75, 76, 77, 78, 79, 80, 87, 82]]
 discards = [[1,2,3,4,5,6,7,8],[3,4,5, 113, 114, 115, 116, 117],[6,7,8],[100, 101, 102, 103, 104, 105, 106, 107,
 	108, 109, 110, 111, 112]]
+
+hands = data['hands']
+discards = data['discards']
 for player in range(4):
 	discards[player] = [(x,1) for x in discards[player]]
 	discards[player] += [(-1, 0)] * (18 - len(discards[player]))
 	# multiplying by negative gives []
-print discards
 
 calls = [[], [], [], []]
-riichi = [-1, -1, -1, -1]
+calls = data['melds']
+riichi = [4, 4, 1, 4]
+riichi = data['riichi']
+riichi_tile = -1
 
 out = open("state.html", "w")
 out.write("""
 <!DOCTYPE html>
 <html><head>
 <style type="text/css">
+div {line-height: 0px;}
 div#toimen_hand {}
 div#kamicha_hand {display: table-cell; vertical-align: middle}
 div#kamicha_kawa {display: table-cell; vertical-align: middle}
@@ -51,20 +62,32 @@ div#own_hand {display: table}
 div#own_hand span {display: table-cell}
 div#row {display: table-row;}
 div.row {display: table-row;}
+td {padding: 0px}
 img.tsumokiri {opacity: 0.75;}
 </style>
 </head><body>\n""")
 out.write("<div id='main'>\n")
+
+def write_tile(tile, variant = ''):
+	if tile[0] != -1:
+		out.write("<img src='%s%s.gif' />" %
+				(tilelist[tile[0] / 4], variant))
+
 # Top of the screen, show toimen first
 out.write("<div id='toimen_hand'>\n")
-for tile in hands[2]:
-	out.write("<img src='%su.gif' />\n" % tilelist[tile / 4])
+for tile in reversed(hands[2]):
+	#write_tile((tile,), 'u')
+	# This is annoying. Any space between the <img> tags spaces the images
+	# in the output
+	out.write("<img src='images/back.gif' />")
 out.write("</div>")
 out.write("<div id='row'>\n")
 # Left edge, player hand
 out.write("<div id='kamicha_hand'>\n")
 for tile in hands[3]:
-	out.write("<img src='%sl.gif' /><br />\n" % tilelist[tile / 4])
+	#write_tile((tile,), 'l')
+	out.write("<img src='images/backl.gif' />")
+	out.write("<br />\n")
 out.write("</div>")
 
 # In the middle, div for all the discards
@@ -76,22 +99,23 @@ out.write("</div>")
 # blanks necessary for spacing
 # or could div them out and float, same as the other rows...
 # Generate a rotated array for the first 18 tiles
-
-def write_tile(tile, variant = ''):
-	if tile[0] == -1:
-		out.write("<td></td>\n")
-	else:
-		out.write("<td><img src='%s%s.gif' /></td>\n" %
-				(tilelist[tile[0] / 4], variant))
-
 # Going to need to do something about overflowed hands later
 kawa = [discards[3][(i/3) + (6 * (2 - (i%3)))] for i in range(18)]
 # extend with all the rest
 out.write("<div id='kamicha_kawa'><table >\n")
+# Inverse of the transform above
+if riichi[3] > -1:
+	riichi_tile = 2 - riichi[3]/6 + (x%6) * 3
+
 for y in range(6):
 	out.write("<tr>\n")
 	for x in range(3):
-		write_tile(kawa[y*3+x], 'l')
+		orientation = 'l'
+		if y*3+x == riichi_tile:
+			orientation = ''
+		out.write("<td>")
+		write_tile(kawa[y*3+x], orientation)
+		out.write("</td>\n")
 	out.write("</tr>\n")
 out.write("</table></div>\n")
 
@@ -99,24 +123,39 @@ out.write("<div id='center_block'>")
 # Toimen discards
 # transform is just reversed discards
 kawa = discards[2]
+riichi_tile = riichi[2]
 out.write("<div id='toimen_kawa'>\n")
 while len(kawa) > 12:
-	write_tile(kawa.pop(), 'u')
+	orientation = 'u'
+	if len(kawa) == riichi_tile - 1:
+		orientation = 'l'
+	write_tile(kawa.pop(), orientation)
 out.write("<br />\n")
 while len(kawa) > 6:
-	write_tile(kawa.pop(), 'u')
+	orientation = 'u'
+	if len(kawa) == riichi_tile - 1:
+		orientation = 'l'
+	write_tile(kawa.pop(), orientation)
 out.write("<br />\n")
 while kawa:
-	write_tile(kawa.pop(), 'u')
+	orientation = 'u'
+	if len(kawa) == riichi_tile + 1:
+		orientation = 'l'
+	write_tile(kawa.pop(), orientation)
 
 out.write("</div>\n") # toimen_kawa
 
 # Own discards
 kawa = discards[0]
 out.write("<div id='own_kawa'>\n")
+riichi_tile = riichi[0]
 for i, tile in enumerate(kawa):
-	write_tile(tile)
-	if i > 0 and i < 18 and i % 6 == 0:
+	print i
+	orientation = ''
+	if i == riichi_tile:
+		orientation = 'r'
+	write_tile(tile, orientation)
+	if i > 4 and i < 18 and (i+1) % 6 == 0:
 		out.write("<br />")
 out.write("</div>") # own_kawa
 
@@ -127,17 +166,26 @@ out.write("<div id='shimocha_discards'><table>\n")
 # Similar arrangment to kamicha_discards
 # Ignoring overflow for now...
 kawa = [discards[1][5 - (i/3) + (i%3) * 6] for i in range(18)]
+riichi_tile = -1
+if riichi[1]> -1:
+	riichi_tile = riichi[1] /6 + ((5 - riichi[1]%6) * 3)
 for y in range(6):
 	out.write("<tr>\n")
 	for x in range(3):
-		write_tile(kawa[y*3+x], 'r')
+		out.write("<td>")
+		orientation = 'r'
+		if riichi_tile == y*3+x:
+			orientation = 'u'
+		write_tile(kawa[y*3+x], orientation)
+		out.write("</td>\n")
 	out.write("</tr>\n")
 out.write("</table></div>\n") # shimocha_discards
 
 # Another hand
 out.write("<div id='shimocha_hand'>\n")
-for tile in hands[1]:
-	out.write("<img src='%sr.gif' /><br />\n" % tilelist[tile / 4])
+for tile in reversed(hands[1]):
+	#out.write("<img src='%sr.gif' /><br />\n" % tilelist[tile / 4])
+	out.write("<img src='images/backl.gif' /><br />\n")
 out.write("</div>")
 out.write("</div>") # row
 
