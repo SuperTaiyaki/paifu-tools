@@ -5,6 +5,9 @@ import sys
 import cgi
 import cgitb
 import re
+import tenhou
+import bz2
+import zipfile
 cgitb.enable()
 
 # CGI blobby stuff
@@ -32,7 +35,10 @@ validating = False
 if 'submit' in form:
 	validating = True
 
-f = open("hands/%s" % hand_id)
+#f = open("hands/%s" % hand_id)
+#smallblob = bz2.BZ2File("hands.zip.bz2")
+blob = zipfile.ZipFile("hands.zip")
+f = blob.open("hands/%s" % hand_id)
 
 # Lifted from paifu and probably gui
 tilelist = []
@@ -56,13 +62,13 @@ hands = data['hands']
 discards = data['discards']
 # Until proper data mapping is available, everything is tsumokiri
 for player in range(4):
-	discards[player] = [(x,1) for x in discards[player]]
+	# Shove this back into the usual format
+	discards[player] = [(x%1024,x/1024) for x in discards[player]]
 	discards[player] += [(-1, 0)] * (18 - len(discards[player]))
 	# multiplying by negative gives []
 
 calls = data['melds']
 riichi = data['riichi']
-riichi_tile = -1
 
 #out = open("state.html", "w")
 out = sys.stdout
@@ -71,14 +77,16 @@ out.write("""
 <html><head>
 <style type="text/css">
 div {line-height: 0px;}
+div#data_box {line-height: 150% !important; text-align: center;margin-top:
+20px;margin-bottom: 20px}
 div#summary {line-height: 100% !important;}
 div#toimen_hand {margin-left: 40px} /* enough to not overlap with kamicha_hand */
 div#kamicha_hand {display: table-cell; vertical-align: middle; padding-right: 20px;}
 div#kamicha_kawa {display: table-cell; vertical-align: middle; }
-div#toimen_kawa {vertical-align: top; padding-bottom: 80px; text-align:
+div#toimen_kawa {vertical-align: top; padding-bottom: 40px; padding-top: 10px; text-align:
 right; margin-left: 20px; margin-right: 20px}
-div#own_kawa {vertical-align: bottom; padding-top: 80px; margin-left: 20px;
-margin-right: 20px}
+div#own_kawa {vertical-align: bottom; padding-top: 40px; margin-left: 20px;
+margin-right: 20px; padding-bottom: 10px;}
 div#center_block {display: table-cell;vertical-align: middle} /* toimen_kawa, own_kawa, info block */
 div#shimocha_kawa { display: table-cell;vertical-align: middle; }
 div#shimocha_hand {display: table-cell;vertical-align: middle;padding-left: 20px;}
@@ -88,8 +96,13 @@ div#row {display: table-row;}
 div.row {display: table-row;}
 div.danger {background-color: red;}
 td {padding: 0px}
-img.tsumokiri, img.unselected {opacity: 0.60;}
+img.tsumokiri, img.unselected {opacity: 0.60}
+div.called_bg {background-color: black; display: inline-block;}
+div.called_bg img {opacity: 0.50;}
+div.tsumokiri_bg {background-color: yellow; display: inline-block;}
+div.tsumokiri_bg img {opacity: 0.80;}
 img.danger_tile {border: 1px solid red;}
+
 </style>
 </head><body>\n""")
 out.write("<div id='main'>\n")
@@ -98,25 +111,31 @@ def write_tile(tile, variant = ''):
 	# This is annoying. Any space between the <img> tags spaces the images
 	# in the output
 	if tile[0] != -1:
-		out.write("<img src='%s%s.png' />" %
-				(tilelist[tile[0] / 4], variant))
+		img = "<img src='%s%s.png' />" % \
+				(tilelist[tile[0] / 4], variant)
+		if tile[1] & tenhou.DISCARD_CALLED:
+			out.write("<div class='called_bg'>%s</div>" % img)
+		elif tile[1] & tenhou.DISCARD_TSUMOKIRI:
+			out.write("<div class='tsumokiri_bg'>%s</div>" % img)
+		else:
+			out.write(img)
 
 # Top of the screen, show toimen first
 out.write("<div id='toimen_hand'>\n")
 # Calls not implemented yet since the test hand doesn't have any
 for tile in reversed(hands[2]):
 	if validating:
-		write_tile((tile,), 'u')
+		write_tile((tile,0), 'u')
 	else:
 		out.write("<img src='/images/back.png' />")
 out.write("\n") # put a break between the blocks
-toimen_called = [1, 2, 0, 0]
+toimen_called = [1, 2, -1, 0]
 for call in reversed(calls[2]):
 	for idx, tile in enumerate(call['tiles']):
 		orientation = 'u'
 		if idx == toimen_called[call['dealer']]:
 			orientation = 'r'
-		write_tile((tile,), orientation)
+		write_tile((tile,0), orientation)
 	out.write("\n")
 
 out.write("</div>")
@@ -125,7 +144,7 @@ out.write("<div id='row'>\n")
 out.write("<div id='kamicha_hand'>\n")
 for tile in hands[3]:
 	if validating:
-		write_tile((tile,), 'l')
+		write_tile((tile,0), 'l')
 	else:
 		out.write("<img src='/images/backl.png' />")
 	out.write("<br />\n")
@@ -140,7 +159,7 @@ for call in reversed(calls[3]):
 		orientation = 'l'
 		if idx == kamicha_called[call['dealer']]:
 			orientation = ''
-		write_tile((tile,), orientation)
+		write_tile((tile,0), orientation)
 		out.write("<br />\n")
 
 out.write("</div>")
@@ -162,14 +181,12 @@ if data['player'] == 3:
 	append = 'class="danger"'
 out.write("<div id='kamicha_kawa' %s ><table >\n" % append)
 # Inverse of the transform above
-if riichi[3] > -1:
-	riichi_tile = 2 - riichi[3]/6 + (x%6) * 3
 
 for y in range(6):
 	out.write("<tr>\n")
 	for x in range(3):
 		orientation = 'l'
-		if y*3+x == riichi_tile:
+		if kawa[y*3+x][1] & tenhou.DISCARD_RIICHI:
 			orientation = ''
 		out.write("<td>")
 		write_tile(kawa[y*3+x], orientation)
@@ -181,39 +198,57 @@ out.write("<div id='center_block'>")
 # Toimen discards
 # transform is just reversed discards
 kawa = discards[2]
-riichi_tile = riichi[2]
 append = ''
 if data['player'] == 2:
 	append = 'class="danger"'
 out.write("<div id='toimen_kawa' %s >\n" % append)
 while len(kawa) > 12:
 	orientation = 'u'
-	if len(kawa) == riichi_tile - 1:
+	tile = kawa.pop()
+	if tile[1] & tenhou.DISCARD_RIICHI:
 		orientation = 'l'
-	write_tile(kawa.pop(), orientation)
+	write_tile(tile, orientation)
 out.write("<br />\n")
 while len(kawa) > 6:
 	orientation = 'u'
-	if len(kawa) == riichi_tile - 1:
+	tile = kawa.pop()
+	if tile[1] & tenhou.DISCARD_RIICHI:
 		orientation = 'l'
-	write_tile(kawa.pop(), orientation)
+	write_tile(tile, orientation)
 out.write("<br />\n")
 while kawa:
 	orientation = 'u'
-	if len(kawa) == riichi_tile + 1:
+	tile = kawa.pop()
+	if tile[1] & tenhou.DISCARD_RIICHI:
 		orientation = 'l'
-	write_tile(kawa.pop(), orientation)
+	write_tile(tile, orientation)
 
 out.write("</div>\n") # toimen_kawa
 
-# Own discards
+#### data box ####
+out.write("<div id='data_box'>\n")
+rounds = ['East 1', 'East 2', 'East 3', 'East 4', 'South 1', 'South 2', 'South 3',
+	'South 4', 'West 1', 'West 2', 'West 3', 'West 4']
+players = ['East', 'South', 'West', 'North'] # TODO: IME this once it's working again
+
+out.write("%s<br /><span style='margin-right: 2em;'>%s</span>\n" % (players[(2 - data['dealer']) % 4],
+	players[(3 - data['dealer']) % 4]))
+out.write("<span style='font-weight: bold;'>Round %s</span>\n" % rounds[data['round']])
+out.write("<span style='margin-left: 2em;'>%s</span><br />%s" % 
+		(players[(1 - data['dealer']) % 4],
+		players[(0 - data['dealer']) % 4]))
+
+
+out.write("</div>\n")
+
+#### Own discards ####
 kawa = discards[0]
 out.write("<div id='own_kawa'>\n")
-riichi_tile = riichi[0]
 for i, tile in enumerate(kawa):
 	orientation = ''
-	if i == riichi_tile:
-		orientation = 'r'
+	# seeing own riichi makes it easy to find the danger tile
+	#if tile[1] & tenhou.DISCARD_RIICHI:
+	#	orientation = 'r'
 	write_tile(tile, orientation)
 	if i > 4 and i < 18 and (i+1) % 6 == 0:
 		out.write("<br />")
@@ -229,15 +264,12 @@ out.write("<div id='shimocha_kawa' %s ><table>\n" % append)
 # Similar arrangment to kamicha_discards
 # Ignoring overflow for now...
 kawa = [discards[1][5 - (i/3) + (i%3) * 6] for i in range(18)]
-riichi_tile = -1
-if riichi[1]> -1:
-	riichi_tile = riichi[1] /6 + ((5 - riichi[1]%6) * 3)
 for y in range(6):
 	out.write("<tr>\n")
 	for x in range(3):
 		out.write("<td>")
 		orientation = 'r'
-		if riichi_tile == y*3+x:
+		if kawa[y*3+x][1] & tenhou.DISCARD_RIICHI:
 			orientation = 'u'
 		write_tile(kawa[y*3+x], orientation)
 		out.write("</td>\n")
@@ -253,7 +285,7 @@ for call in calls[1]:
 		orientation = 'r'
 		if idx == shimocha_called[call['dealer']]:
 			orientation = 'u'
-		write_tile((tile,), orientation)
+		write_tile((tile,0), orientation)
 		out.write("<br />")
 
 	out.write("<br />")
@@ -301,7 +333,7 @@ for call in reversed(calls[0]):
 		orientation = ''
 		if idx == self_called[call['dealer']]:
 			orientation = 'r'
-		write_tile((tile,), orientation)
+		write_tile((tile,0), orientation)
 	out.write("\n")
 
 out.write("</div>\n") # main
@@ -309,7 +341,7 @@ if validating:
 	out.write("<div id='summary' style='clear: left'>\n")
 	out.write("<p>Full list of waits: \n")
 	for tile in data['waits']:
-		write_tile((tile * 4,))
+		write_tile((tile * 4,0))
 
 	points = 0
 	fail = False

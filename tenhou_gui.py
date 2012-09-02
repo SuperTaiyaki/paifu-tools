@@ -10,27 +10,27 @@ from tenhou import *
 tilelist = []
 for x in range(0, 9):
 #        tilelist.append(Image(source="%sm.gif" % (x+1)))
-        tilelist.append("images/%sm.gif" % (x+1))
+        tilelist.append("images/%sm.png" % (x+1))
 for x in range(0, 9):
 #        tilelist.append(Image(source="%sp.gif" % (x+1)))
-        tilelist.append("images/%sp.gif" % (x+1))
+        tilelist.append("images/%sp.png" % (x+1))
 for x in range(0, 9):
 #        tilelist.append(Image(source="%ss.gif" % (x+1)))
-        tilelist.append("images/%ss.gif" % (x+1))
+        tilelist.append("images/%ss.png" % (x+1))
 for x in range(0, 8):
 #        tilelist.append(Image(source="%sz.gif" % (x+1)))
-        tilelist.append("images/%sz.gif" % (x+1))
+        tilelist.append("images/%sz.png" % (x+1))
 
 def draw_tile(tile, rotated = False):
 	if rotated:
 		Rotate(90, 0, 0, 1)
 		# no idea why pos isn't 80 or 120
-		Rectangle(pos=(0,-100), size=(80, 120),
+		Rectangle(pos=(0,-100), size=(80, 95),
 				source=tilelist[tile / 4])
 		Rotate(-90, 0, 0, 1)
 		Translate(120, 0, 0)
 	else:
-		Rectangle(pos=(0,0), size=(80, 120),
+		Rectangle(pos=(0,0), size=(80, 95),
 			source=tilelist[tile / 4])
 		Translate(80, 0, 0)
 
@@ -96,13 +96,13 @@ def draw_player(canvas, player, position):
 		col_start = -400
 		Translate(-400, -400, 0)
 		i = 0
-		for tile in player.discards:
-			# TODO: rotated tile for riichi
-			if tile in player.called:
+		for (tile, flags) in player.discards:
+			if flags & DISCARD_CALLED:
 				Color(0.5, 0.5, 0.5)
 			else:
 				Color(1, 1, 1)
-			rotated = (tile == player.riichitile)
+			rotated = (flags & DISCARD_RIICHI)
+			# TODO: tsumokiri flag
 			draw_tile(tile, rotated)
 			i += 1
 			if i == 6:

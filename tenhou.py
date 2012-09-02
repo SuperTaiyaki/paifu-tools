@@ -4,6 +4,10 @@ import sys
 import itertools
 from xml.dom.minidom import parse
 
+DISCARD_TSUMOKIRI = 1
+DISCARD_CALLED = 2
+DISCARD_RIICHI = 4
+
 def debug(args):
 	#print(args)
 	pass
@@ -140,7 +144,6 @@ def agari_tiles(hand):
 			outs.append(tile)
 	return outs
 
-
 def shanten(hand):
 	# ignoring chiitoitsu for now
 	suits = [[],[],[],[]]
@@ -153,7 +156,6 @@ def shanten(hand):
 			suits[2].append(tile)
 		else:
 			suits[3].append(tile)
-
 
 
 class Player(object):
@@ -183,13 +185,18 @@ class Player(object):
 			if self.tsumo is not None:
 				self.hand.add(self.tsumo)
 		# if not in the hand, it must be the tsumo
+		flag = 0
+		if self.tsumo == tile:
+			flag = DISCARD_TSUMOKIRI
+		self.discards.append((tile, flag))
 		self.tsumo = None
-		self.discards.append(tile)
 		debug("Hand after: %s" % (map(tile_decode,list(self.hand))))
 
 	def riichi(self):
-		self.riichitile = self.discards[-1] #len(self.discards)
-		# May need to tweak this to account for the tile being called
+		self.riichitile = self.discards[-1][0]
+		(tile, flag) = self.discards[-1]
+		flag |= DISCARD_RIICHI
+		self.discards[-1] = (tile, flag)
 
 	# stuff for calls
 
@@ -203,9 +210,12 @@ class Player(object):
 	# Mark the last discard as being called by someone else
 	def mark_called(self):
 		self.called.add(self.discards[-1])
+		(tile, flag) = self.discards[-1]
+		flag |= DISCARD_CALLED
+		self.discards[-1] = (tile, flag)
 
 class Game(object):
-	def __init__(self):
+	def __init__(self, dealer = 0, round = 0):
 		self.players = [Player(), Player(), Player(), Player()]
 
 		self.wall = []
@@ -215,6 +225,9 @@ class Game(object):
 		self.tile = -1
 		self.player = -1
 		self.data = {} # Miscellaneous crap holding for events
+		self.dealer = dealer
+		self.round = round
+		self.dora = []
 
 	# wall generation NYI, too complicated
 
@@ -250,6 +263,8 @@ class Game(object):
 		self.event = data['type']
 		self.tile = data['tiles'][data['called']]
 		self.player = player
+	def add_dora(self, tile):
+		self.dora.append(tile) # indicators or actual tiles? not sure yet.
 	# Set up arbitrary events for things like ryuukyoku that don't change
 	# the game state
 	def set_event(self, event, player = -1, tile = -1, other = {}):
@@ -338,7 +353,15 @@ def run_log(stream):
 		if element.nodeName in ignore_cmd:
 			continue
 		if element.nodeName == 'INIT':
-			game = Game()
+
+			seed = element.attributes['seed'].value.split(',')
+			# round, honba, leftover riichi sticks, die1, die2, dora
+			round = int(seed[0])
+			dora = int(seed[5])
+			dealer = int(element.attributes['oya'].value)
+
+			game = Game(round = round, dealer = dealer)
+			game.add_dora(dora)
 			hands = []
 			for x in range(0,4):
 				hand = element.attributes['hai%s' % x].value
@@ -348,7 +371,8 @@ def run_log(stream):
 			debug("HANDS STARTED: %s" % (hands))
 			game.deal(hands)
 		if element.nodeName == 'DORA':
-			continue # so this doesn't get confused with a discard
+			game.add_dora(int(element.attributes['hai'].value))
+			continue
 		elif element.nodeName == 'REACH':
 			if element.attributes['step'].value == "1":
 				# Consume the next element without yielding, so
@@ -389,8 +413,15 @@ def run_log(stream):
 			game.discard(player, tile)
 		elif element.nodeName[0] == 'N':
 			player = int(element.attributes['who'].value)
-			code =  int(element.attributes['m'].value)
-			game.call(player, parse_call(code))
+			code = int(element.attributes['m'].value)
+			call = parse_call(code)
+			# Check this for sanity since kans aren't handled
+			# properly
+			if call:
+				game.call(player, call)
+			else:
+				exit(0) # FIXME: Don't pollute the logs for now
+			# game.call(player, parse_call(code))
 
 		# Hrm, this may require some adjustment... if a player sets up a
 		# riichi and the discard is ronned or called it may not show
