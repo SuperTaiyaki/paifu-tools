@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 import os
 import json
 import sys
@@ -8,6 +9,7 @@ import re
 import tenhou
 import bz2
 import zipfile
+import subprocess
 cgitb.enable()
 
 # CGI blobby stuff
@@ -22,7 +24,7 @@ if 'hand' not in form:
 	exit(0)
 
 hand_id = form.getfirst('hand')
-if not re.match("^[a-z0-9]+$", hand_id):
+if not re.match("^[a-z0-9-]+$", hand_id):
 	print "Invalid hand ID."
 	exit(0)
 score = form.getfirst('score', 0)
@@ -37,8 +39,12 @@ if 'submit' in form:
 
 #f = open("hands/%s" % hand_id)
 #smallblob = bz2.BZ2File("hands.zip.bz2")
-blob = zipfile.ZipFile("hands.zip")
-f = blob.open("hands/%s" % hand_id)
+#blob = zipfile.ZipFile("hands.zip")
+#f = blob.open("hands/%s" % hand_id)
+
+unblob = subprocess.check_output(["tar", "Oxf", "hands.tar.gz", "hands/%s" % hand_id])
+
+data = json.loads(unblob)
 
 # Lifted from paifu and probably gui
 tilelist = []
@@ -56,7 +62,6 @@ for x in range(0, 8):
 # Hands ordered as in tenhou data - self, right, across, left
 # (tile, tsumokiri?)
 # f = open(sys.argv[1])
-data = json.load(f)
 #print data
 hands = data['hands']
 discards = data['discards']
@@ -79,6 +84,8 @@ out.write("""
 div {line-height: 0px;}
 div#data_box {line-height: 150% !important; text-align: center;margin-top:
 20px;margin-bottom: 20px}
+table {border-collapse: collapse}
+div#main {float: left;}
 div#summary {line-height: 100% !important;}
 div#toimen_hand {margin-left: 40px} /* enough to not overlap with kamicha_hand */
 div#kamicha_hand {display: table-cell; vertical-align: middle; padding-right: 20px;}
@@ -90,53 +97,83 @@ margin-right: 20px; padding-bottom: 10px;}
 div#center_block {display: table-cell;vertical-align: middle} /* toimen_kawa, own_kawa, info block */
 div#shimocha_kawa { display: table-cell;vertical-align: middle; }
 div#shimocha_hand {display: table-cell;vertical-align: middle;padding-left: 20px;}
-div#own_hand {display: table; margin-left: 40px;float: left;}
+div#own_hand {display: table; margin-left: 40px;float: left; overflow: visi}
 div#own_hand span {display: table-cell}
+div#own_calls {white-space: nowrap}
 div#row {display: table-row;}
 div.row {display: table-row;}
 div.danger {background-color: red;}
-td {padding: 0px}
+td {border-spacing: 0px; padding: 0px; vertical-align: bottom}
+td img {vertical-align: bottom; display: block;}
 img.tsumokiri, img.unselected {opacity: 0.60}
 div.called_bg {background-color: black; display: inline-block;}
 div.called_bg img {opacity: 0.50;}
 div.tsumokiri_bg {background-color: yellow; display: inline-block;}
 div.tsumokiri_bg img {opacity: 0.80;}
 img.danger_tile {border: 1px solid red;}
+img.highlight_tile {border: 1px solid green}
 
 </style>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.1/jquery.min.js" type="text/Javascript"></script>
 </head><body>\n""")
 out.write("<div id='main'>\n")
 
-def write_tile(tile, variant = ''):
+def write_tile(tile, variant = '', ret = False):
 	# This is annoying. Any space between the <img> tags spaces the images
 	# in the output
 	if tile[0] != -1:
-		img = "<img src='%s%s.png' />" % \
-				(tilelist[tile[0] / 4], variant)
+		display = tile[0] / 4
+		img = "<img src='%s%s.png' class='tile_%s' />" % \
+				(tilelist[display], variant, display)
 		if tile[1] & tenhou.DISCARD_CALLED:
-			out.write("<div class='called_bg'>%s</div>" % img)
+			html = "<div class='called_bg'>%s</div>" % img
 		elif tile[1] & tenhou.DISCARD_TSUMOKIRI:
-			out.write("<div class='tsumokiri_bg'>%s</div>" % img)
+			html = "<div class='tsumokiri_bg'>%s</div>" % img
 		else:
-			out.write(img)
+			html = img
+		if ret:
+			return html
+		else:
+			out.write(html)
 
-# Top of the screen, show toimen first
+def write_back(variant = '', ret = False):
+	if variant == 'u':
+		variant = ''
+	elif variant == 'r':
+		variant = 'l'
+	html = "<img src='/images/back%s.png' class='tile_back' />" % variant
+	if ret:
+		return html
+	else:
+		out.write(html)
+
+#### toimen hand ####
 out.write("<div id='toimen_hand'>\n")
-# Calls not implemented yet since the test hand doesn't have any
+# calls first
+toimen_called = [1, 2, -1, 0]
+for call in reversed(calls[2]):
+	if len(call['tiles']) == 4 and call['dealer'] == 2:
+		# minkan
+		write_tile((call['tiles'][0],0), 'u')
+		write_back()
+		write_back()
+		write_tile((call['tiles'][0],0), 'u')
+	else:
+		rotated = toimen_called[call['dealer']]
+		if len(call['tiles']) == 4 and rotated == 2:
+			rotated = 3
+		for idx, tile in enumerate(reversed(call['tiles'])):
+			orientation = 'u'
+			if idx == rotated:
+				orientation = 'r'
+			write_tile((tile,0), orientation)
+	out.write("\n")
+
 for tile in reversed(hands[2]):
 	if validating:
 		write_tile((tile,0), 'u')
 	else:
 		out.write("<img src='/images/back.png' />")
-out.write("\n") # put a break between the blocks
-toimen_called = [1, 2, -1, 0]
-for call in reversed(calls[2]):
-	for idx, tile in enumerate(call['tiles']):
-		orientation = 'u'
-		if idx == toimen_called[call['dealer']]:
-			orientation = 'r'
-		write_tile((tile,0), orientation)
-	out.write("\n")
 
 out.write("</div>")
 out.write("<div id='row'>\n")
@@ -151,16 +188,26 @@ for tile in hands[3]:
 
 # kamicha calls... calls are tile is 2, 1, 0
 # first tile is the one that was called, push it to the right place in the list
-kamicha_called = [2,1,0]
+kamicha_called = [2,1,0,-1]
 # reversed because calls go outside to inside
 for call in reversed(calls[3]):
 	out.write("<br />\n")
-	for idx, tile in enumerate(call['tiles']):
-		orientation = 'l'
-		if idx == kamicha_called[call['dealer']]:
-			orientation = ''
-		write_tile((tile,0), orientation)
-		out.write("<br />\n")
+	if len(call['tiles']) == 4 and call['dealer'] == 3:
+		tiles = [write_tile((call['tiles'][0],0), 'l', True)]
+		tiles.append(write_back('l', True))
+		tiles.append(write_back('l', True))
+		tiles.append(write_tile((call['tiles'][0],0), 'l', True))
+		out.write(("<br />\n").join(tiles))
+	else:
+		rotated = kamicha_called[call['dealer']]
+		if len(call['tiles']) == 4 and rotated == 2:
+			rotated = 3
+		for idx, tile in enumerate(call['tiles']):
+			orientation = 'l'
+			if idx == rotated:
+				orientation = ''
+			write_tile((tile,0), orientation)
+			out.write("<br />\n")
 
 out.write("</div>")
 
@@ -227,17 +274,20 @@ out.write("</div>\n") # toimen_kawa
 
 #### data box ####
 out.write("<div id='data_box'>\n")
-rounds = ['East 1', 'East 2', 'East 3', 'East 4', 'South 1', 'South 2', 'South 3',
-	'South 4', 'West 1', 'West 2', 'West 3', 'West 4']
-players = ['East', 'South', 'West', 'North'] # TODO: IME this once it's working again
+rounds = ['東1局', '東2局', '東3局', '東4局',
+	'南1局','南2局','南3局','南4局',
+	'西1局','西2局','西3局','西4局'] # tenhou stops here
+#rounds = ['East 1', 'East 2', 'East 3', 'East 4', 'South 1', 'South 2', 'South 3',
+#	'South 4', 'West 1', 'West 2', 'West 3', 'West 4']
+#players = ['East', 'South', 'West', 'North'] # TODO: IME this once it's working again
+players = ['東','南','西','北']
 
 out.write("%s<br /><span style='margin-right: 2em;'>%s</span>\n" % (players[(2 - data['dealer']) % 4],
 	players[(3 - data['dealer']) % 4]))
-out.write("<span style='font-weight: bold;'>Round %s</span>\n" % rounds[data['round']])
+out.write("<span style='font-weight: bold;'>%s</span>\n" % rounds[data['round']])
 out.write("<span style='margin-left: 2em;'>%s</span><br />%s" % 
 		(players[(1 - data['dealer']) % 4],
 		players[(0 - data['dealer']) % 4]))
-
 
 out.write("</div>\n")
 
@@ -256,7 +306,7 @@ out.write("</div>") # own_kawa
 
 out.write("</div>\n") # center_block
 
-# Shimocha discards
+#### Shimocha discards ####
 append = ''
 if data['player'] == 1:
 	append = 'class="danger"'
@@ -279,14 +329,26 @@ out.write("</table></div>\n") # shimocha_kawa
 # Another hand
 out.write("<div id='shimocha_hand'>\n")
 # [dealer number] -> tile position
-shimocha_called = [2,0,0,1] # [1] is only used for kans
+shimocha_called = [2,-1,0,1]
 for call in calls[1]:
-	for idx, tile in enumerate(reversed(call['tiles'])):
-		orientation = 'r'
-		if idx == shimocha_called[call['dealer']]:
-			orientation = 'u'
-		write_tile((tile,0), orientation)
-		out.write("<br />")
+
+	if len(call['tiles']) == 4 and call['dealer'] == 1:
+		tiles = [write_tile((call['tiles'][0],0), 'r', True)]
+		tiles.append(write_back('r', True))
+		tiles.append(write_back('r', True))
+		tiles.append(write_tile((call['tiles'][0],0), 'r', True))
+		out.write(("<br />\n").join(tiles))
+	else:
+		rotated = shimocha_called[call['dealer']]
+		if len(call['tiles']) == 4 and rotated == 2:
+			rotated = 3
+
+		for idx, tile in enumerate(reversed(call['tiles'])):
+			orientation = 'r'
+			if idx == rotated:
+				orientation = 'u'
+			write_tile((tile,0), orientation)
+			out.write("<br />")
 
 	out.write("<br />")
 
@@ -305,12 +367,12 @@ out.write("<input type='hidden' name='score' value='%d'></input>" % score)
 out.write("<div id='own_hand'>\n")
 out.write("<div class='row'>\n")
 for i, tile in enumerate(sorted(hands[0])):
-	classes = []
+	classes = ['tile_%s' % (tile / 4)]
 	if validating and 'tile_%d' % tile not in form:
 		classes.append('unselected')
 	if validating and tile/4 in data['waits']:
 		classes.append('danger_tile')
-	
+
 	if classes:
 		append = 'class="%s"' % ' '.join(classes)
 	else:
@@ -324,19 +386,33 @@ if not validating:
 	out.write("<input type='submit' name='submit' value='Submit' />\n")
 
 out.write("</div>\n") # row
-out.write("</div></div>\n") # calls, own_hand
+out.write("</div>\n") # own_hand
 out.write("</form>\n")
-# Insert called tiles around here
-self_called = [0, 2, 1, 0]
+#### own called tiles ####
+out.write("<div id='own_calls'>\n")
+self_called = [-1, 2, 1, 0]
 for call in reversed(calls[0]):
-	for idx, tile in enumerate(call['tiles']):
-		orientation = ''
-		if idx == self_called[call['dealer']]:
-			orientation = 'r'
-		write_tile((tile,0), orientation)
+	if len(call['tiles']) == 4 and call['dealer'] == 0:
+		# minkan
+		write_tile((call['tiles'][0],0))
+		write_back()
+		write_back()
+		write_tile((call['tiles'][0],0))
+	else:
+		rotated = self_called[call['dealer']]
+		if rotated == 2 and len(call['tiles']) == 4:
+			rotated = 3
+		for idx, tile in enumerate(call['tiles']):
+			orientation = ''
+			if idx == rotated:
+				orientation = 'r'
+			write_tile((tile,0), orientation)
 	out.write("\n")
-
+out.write("</div>\n") # own_calls
 out.write("</div>\n") # main
+
+dora = ["<img src='%s.png' />" % tilelist[t/4] for t in data['dora']]
+out.write("""<div id='outside_data'>Dora indicators: %s</div>""" % ''.join(dora))
 if validating:
 	out.write("<div id='summary' style='clear: left'>\n")
 	out.write("<p>Full list of waits: \n")
@@ -345,6 +421,7 @@ if validating:
 
 	points = 0
 	fail = False
+	oldscore = score
 	for key in form.keys():
 		if key.find('tile_', 0, 5) == -1:
 			continue
@@ -356,11 +433,11 @@ if validating:
 		if tile/4 in data['waits']:
 			points = score = 0
 			fail = True
-			continue
+			break
 		points += 1
 	score += points
 	if fail:
-		out.write("</p><p>Dealt in. Score reset.")
+		out.write("</p><p>Dealt in. Score reset. Score: %d" % oldscore)
 	out.write("</p><p>Points this hand: %d<br />Total score: %d</p>" % (points,
 			score))
 	out.write("</p>\n")
@@ -368,6 +445,16 @@ if validating:
 	out.write("<input type='hidden' name='score' value='%d'></input>" % score)
 	out.write("<input type='submit' name='next' value='Next hand'></input>\n")
 	out.write("</form></div>\n")
-out.write("<p style='clear: left;'><br />Hand ID: %s</p></html>\n" % hand_id)
-out.close()
+out.write("<p style='clear: left;'><br />Hand ID: <a href='/cgi-bin/gamestate.py?hand=%s'>%s</a></p>\n"
+		% (hand_id, hand_id))
+out.write("""
+<script type="text/Javascript">
+/* incomplete
+$("img[class*='tile_']").hover(
+	function(){$(this).addClass("highlight_tile");},
+	function(){$(this).removeClass("highlight_tile");});
+*/
+</script>
+</body></html>""")
 
+out.close()
