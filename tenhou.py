@@ -286,6 +286,7 @@ def parse_call(code):
 	# 29935 = chi 345p (called 5p)
 	debug("Dealing with call %d = %x" % (code, code))
 	call = {}
+	# branching based on the JS sample code
 	if code & (1 << 2):
 		# chi. also matches nuki, but ignoring 3ma
 		call['dealer'] = code & 0x3
@@ -307,17 +308,7 @@ def parse_call(code):
 		call['type'] = 'chi'
 
 		debug("Chi: %s %s %s" % call['tiles'])
-		return call
-	elif code & (0x3c) == 0: # Not complete!
-		debug("Kan")
-		# kan
-		tile = code >> 8
-		call['called'] = tile % 4
-		tile &= ~3 # mask out the called bits
-		call['tiles'] = range(tile, tile+4)
-		call['dealer'] = code & 0x3
-		call['type'] = 'kan'
-	elif code & 0x1C == 0x8: # 0b111 xx = 0b010 xx
+	elif code & (1 << 3): # 0b111 xx = 0b010 xx
 		debug("Pon")
 		call['dealer'] = code & 0x3 # this is _relative to the caller_
 		unused = (code >> 5) & 0x3 # the tile not in the meld
@@ -331,14 +322,30 @@ def parse_call(code):
 				continue
 			call['tiles'].append(base + i)
 		call['type'] = 'pon'
+	elif code & (1 << 4):
+		# chakan - extending a koutsu
+		# will need support logic in player to handle this
+		pass
+	elif code & (1 << 5):
+		# nuki, NFA
+		return {}
+	else:
+		# other kan
+		debug("Kan")
+		# kan
+		tile = code >> 8
+		call['called'] = tile % 4
+		tile &= ~3 # mask out the called bits
+		call['tiles'] = range(tile, tile+4)
+		call['dealer'] = code & 0x3
+		call['type'] = 'kan'
 	# Should put an exception here
 	return call
 
 
 draw_cmd = ['T', 'U', 'V', 'W'] # self, right, opposite, left
 discard_cmd = ['D', 'E', 'F', 'G']
-ignore_cmd = ['SHUFFLE', 'GO', 'TAIKYOKU', 'UN', '#text'] # #text is a weird xml thing?
-
+ignore_cmd = ['SHUFFLE', 'TAIKYOKU', 'UN', '#text'] # #text is a weird xml thing?
 
 def run_log(stream):
 	doc = parse(stream)
@@ -352,7 +359,13 @@ def run_log(stream):
 
 		if element.nodeName in ignore_cmd:
 			continue
-		if element.nodeName == 'INIT':
+		elif element.nodeName == 'GO':
+			gametype = int(element.attributes['type'].value)
+			if gametype & 0x10:
+				print "3p not supported."
+				raise StopIteration
+			continue
+		elif element.nodeName == 'INIT':
 
 			seed = element.attributes['seed'].value.split(',')
 			# round, honba, leftover riichi sticks, die1, die2, dora
@@ -370,7 +383,7 @@ def run_log(stream):
 				hands.append(tiles)
 			debug("HANDS STARTED: %s" % (hands))
 			game.deal(hands)
-		if element.nodeName == 'DORA':
+		elif element.nodeName == 'DORA':
 			game.add_dora(int(element.attributes['hai'].value))
 			continue
 		elif element.nodeName == 'REACH':
@@ -414,14 +427,15 @@ def run_log(stream):
 		elif element.nodeName[0] == 'N':
 			player = int(element.attributes['who'].value)
 			code = int(element.attributes['m'].value)
+			
 			call = parse_call(code)
 			# Check this for sanity since kans aren't handled
 			# properly
 			if call:
 				game.call(player, call)
 			else:
-				exit(0) # FIXME: Don't pollute the logs for now
-			# game.call(player, parse_call(code))
+				raise StopIteration # FIXME: Don't pollute the logs for now
+			#game.call(player, parse_call(code))
 
 		# Hrm, this may require some adjustment... if a player sets up a
 		# riichi and the discard is ronned or called it may not show
