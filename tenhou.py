@@ -86,14 +86,15 @@ def kokushi(tiles):
 	# TODO: NYI
 	return False
 
-def _reduce_koutsu(tiles):
+
+# The _reduce functions, but with (shuntsu, return) signatures
+def _gather_koutsu(tiles):
 	for tile in range(len(tiles)):
 		if tiles[tile] >= 3:
 			out = copy.copy(tiles)
 			out[tile] -= 3
-			yield out
-
-def _reduce_mentsu(tiles):
+			yield ((tile, tile, tile), out)
+def _gather_mentsu(tiles):
 	for base in [0, 9, 18]:
 		for inc in range(7):
 			if all([tiles[base+inc+i] for i in [0,1,2]]):
@@ -101,24 +102,45 @@ def _reduce_mentsu(tiles):
 				out[base+inc] -= 1
 				out[base+inc+1] -= 1
 				out[base+inc+2] -= 1
-				yield out
+				yield ((base+inc, base+inc+1, base+inc+2), out)
 
+# Yes/no check only
 def _agari(tiles):
 	# No tiles left
 	if max(tiles) == 0:
 		return False
 	# If there's only a pair left, we're done
-	# This is kind of inelegant
-	if len([x for x in tiles if x == 2]) == 1 and sum(tiles) == 2:
+	if tiles.count(2) == 1 and sum(tiles) == 2:
 		return True
 
-	iter = _reduce_koutsu(tiles)
-	if any((_agari(hand) for hand in iter)):
-		return True
-	iter = _reduce_mentsu(tiles)
-	if any((_agari(hand) for hand in iter)):
+	iter = itertools.chain(_gather_koutsu(tiles), _gather_mentsu(tiles))
+	if any((_agari(hand) for _, hand in iter)):
 		return True
 	return False
+
+# In: melds, list of tiles
+# Out: [] of hands
+# hand is [(melds)]
+def _agari_structures(parts, tiles):
+	# No tiles left
+	if max(tiles) == 0:
+		return []
+	# If there's only a pair left, we're done
+	if tiles.count(2) == 1 and sum(tiles) == 2:
+		tile = tiles.index(2)
+		return [sorted(parts + [(tile, tile)])]
+
+	structures = []
+	iter = itertools.chain(_gather_koutsu(tiles), _gather_mentsu(tiles))
+	for meld, tiles in iter:
+		ret = _agari_structures(parts + [meld], tiles)
+		# Rather than checking for dupes, something with strict ordering
+		# may work better
+		for hand in ret:
+			if hand not in structures:
+				structures.append(hand)
+
+	return structures
 
 # tiles 0-34, not 0-136
 def agari(hand):
@@ -132,6 +154,49 @@ def agari(hand):
 	for tile in hand:
 		tc[tile] += 1
 	return _agari(tc)
+
+# Return all valid interpretations of the partial hand
+def agari_structures(hand):
+	tc = [0] * 34
+	mentsu = 0
+	for tile in hand:
+		tc[tile] += 1
+	return _agari_structures([], tc)
+
+# Need to pass in how the last tile was obtained...
+def yaku(calls, tiles, round):
+	parts = agari_structure(tiles)
+
+# tsumo = self drawn winning tile, regardless of hand structure
+# Hand is 0-11 for east 1 - west 4
+# seat is 0 for east 1st dealer
+def _count_fu(calls, hand, seat, tsumo):
+	fu = 20
+	if not tsumo and not calls:
+		fu += 10
+	if tsumo:
+		fu += 2
+	for call in calls:
+		cf = 2
+		if call['type'] == 'chi':
+			continue
+		elif call['type'] == 'kan':
+			cf *= 2
+		# closed kan, double again
+		tile = call['tiles'][0]
+		# round wind
+		# self wind
+		# dragons
+		fu += cf
+	for meld in hand:
+		cf = 4
+		if len(meld) == 2:
+			# round wind, seat wind, dragons....
+
+		if meld[0] != meld[1]:
+			continue # mentsu
+		fu += cf
+	return fu
 
 # Brute force-ish method, try each tile and see if it completes the hand
 # This ignores tiles that are impossible (i.e. held in a kan or by opponents)
