@@ -1,3 +1,4 @@
+#!/usr/bin/python
 
 import copy
 import sys
@@ -7,6 +8,12 @@ from xml.dom.minidom import parse
 DISCARD_TSUMOKIRI = 1
 DISCARD_CALLED = 2
 DISCARD_RIICHI = 4
+
+#>>> tenhou.convert_tiles([x*4 for x in [0,8,9,17,18,26,27,28,29,30,31,32,33]])
+#['1m', '9m', '1p', '9p', '1s', '9s', 'ton', 'nan', 'sha', 'pei', 'haku', 'hatsu', 'chun']
+ 
+TERMINALS = set([0,8,9,17,18,26,27,28,29,30,31,32,33])
+HONOURS = set([27,28,29,30,31,32,33])
 
 def debug(args):
 	#print(args)
@@ -42,6 +49,22 @@ def tile_decode(tile):
 def convert_tiles(tiles):
 	return [tile_decode(t) for t in tiles]
 
+
+def read_tiles(string):
+	""" Take a shorthand hand representation and return an array of tile numbers."""
+	tiles = []
+	ret = []
+	suits = 'mpsz'
+	for c in string:
+		if c in suits:
+			offset = suits.index(c)*9
+			ret.extend([offset+x for x in tiles])
+			tiles = []
+		else:
+			# Human representation is 1-based
+			tiles.append(int(c) - 1)
+	return ret
+
 # Take out all complete mentsu
 def reduce(tiles):
 	# transform to tiles[tile #] = (count of tile)
@@ -71,6 +94,7 @@ def reduce(tiles):
 		output.extend([tile] * count)
 	return output
 
+# Tiles is an array of tile indices, not tile counts
 def chiitoitsu(tiles):
 	if len(tiles) != 14:
 		return False
@@ -78,6 +102,7 @@ def chiitoitsu(tiles):
 	# Assuming they don't have to be distinct pairs. TODO: confirm for
 	# Tenhou
 	return all((s[i] == s[i + 1] for i in range(0,14,2)))
+
 
 def kokushi(tiles):
 	terminals = set([0,8,9,17,18,26,27,28,29,30,31,32,33])
@@ -104,6 +129,23 @@ def _gather_mentsu(tiles):
 				out[base+inc+2] -= 1
 				yield ((base+inc, base+inc+1, base+inc+2), out)
 
+# Alternative chiitoitsu, using the 34-array of tiles
+def _chiitoitsu(tiles):
+	# Is this making any incorrect assumptions? The concern is that there
+	# will be tiles with 1 or 3 available and the kantsu will stuff the hand
+	# up to 14 anyway
+	# Probably not a problem as kantsu will knock the number of incoming
+	# tiles below 14.
+	return tiles.count(2) + tiles.count(4) * 2 == 7
+
+def _kokushi(tiles):
+	if tiles.count(2) != 1 and tiles.count(1) != 12:
+		return False
+	for tile in TERMINALS:
+		if not tiles[tile]:
+			return False
+	return True
+
 # Yes/no check only
 def _agari(tiles):
 	# No tiles left
@@ -123,6 +165,13 @@ def _agari(tiles):
 # hand is [(melds)]
 def _agari_structures(parts, tiles):
 	# No tiles left
+	if _kokushi(tiles):
+		# unique, no need to do any further processing
+		pass
+	elif _chiitoitsu(tiles):
+		pass
+		# chiitoitsu requires all 14 tiles, so recursive calls will fall
+		# short
 	if max(tiles) == 0:
 		return []
 	# If there's only a pair left, we're done
@@ -168,35 +217,225 @@ def yaku(calls, tiles, round):
 	parts = agari_structure(tiles)
 
 # tsumo = self drawn winning tile, regardless of hand structure
-# Hand is 0-11 for east 1 - west 4
+# round is 0-11 for east 1 - west 4
 # seat is 0 for east 1st dealer
-def _count_fu(calls, hand, seat, tsumo):
+# tsumo is t/f
+# Hand should _include_ final_tile
+def _count_fu(calls, hand, round, seat, tsumo, final_tile):
+	fu_list = [(20, 'base')]
 	fu = 20
 	if not tsumo and not calls:
 		fu += 10
-	if tsumo:
+		fu_list.append((10, 'menzen ron'))
+	if tsumo: # Hrm, need to account for pinfu... probably
 		fu += 2
+		fu_list.append((2, 'tsumo'))
 	for call in calls:
 		cf = 2
 		if call['type'] == 'chi':
 			continue
 		elif call['type'] == 'kan':
-			cf *= 2
-		# closed kan, double again
+			cf *= 4
+			# Do something about closed kan here - double again
 		tile = call['tiles'][0]
-		# round wind
-		# self wind
-		# dragons
+		if tile in TERMINALS:
+			cf *= 2
 		fu += cf
-	for meld in hand:
-		cf = 4
-		if len(meld) == 2:
-			# round wind, seat wind, dragons....
+		if cf:
+			fu_list.append((cf, 'call %s' % str(call)))
+	# Wait check
+	# TODO NYI
+	# Two-sided wait if a group in hand
+	#- Contains the tile at an extremity (i.e. not position [1])
+	#- doesn't also contain a terminal
 
+	ryanmen = False
+	for group in hand:
+		if final_tile in group:
+			if len(group) == 2:
+				continue
+			if group[0] == group[1]:
+				continue
+			if group[1] == final_tile:
+				continue # kanchan
+			# Penchan is a pain...
+			if (final_tile % 9 == 2 and group[0] % 9 == 0) or\
+				(final_tile % 9 == 6 and group[2]%9 == 8):
+				continue
+			ryanmen = True
+			break
+	if not ryanmen:
+		fu += 2
+		fu_list.append((2, 'wait'))
+
+	for meld in hand:
+		if len(meld) == 2:
+			# Pair check
+			tile = meld[0]
+			# round wind
+			if tile == round + 27:
+				# Check!
+				fu += 2
+				fu_list.append((2, 'Round wind pair'))
+			# self wind - not exclusive!
+			if tile == seat + 27:
+				fu += 2
+				fu_list.append((2, 'Self wind pair'))
+			# dragons
+			if tile > 30:
+				fu += 2
+				fu_list.append((2, 'Dragon pair'))
+			continue
 		if meld[0] != meld[1]:
 			continue # mentsu
+		tile = meld[0]
+
+		cf = 4 # 2 base, 2 closed
+		if tile in TERMINALS:
+			cf *= 2
+		# kans become calls
 		fu += cf
+		fu_list.append((cf, 'Structure bonus: %s' % str(meld)))
+	print(fu_list)
 	return fu
+	# Probably worth breaking up the result too
+
+# Later, will need a function to go through the entire list and sort out any
+# conflicts (toitoi/suuankou etc)
+
+# These functions assume the hand is not chiitoitsu or kokushi
+
+# Check for tanyao, honroutou, chinroutou, tsuiisou
+# non-structural
+def _yaku_terminals(tiles):
+	terminals = 0
+	middles = 0
+	honours = 0
+
+	for tile in tiles:
+		if tile in HONOURS:
+			honours += 1
+
+		if tile in TERMINALS: # Yes, implies the above
+			terminals += 1
+			print "Terminal %s" % tile
+		else:
+			middles += 1
+	print("Terminals: %d Middles: %d Honours: %d" % (terminals, middles, honours))
+	if middles != 0 and terminals != 0:
+		return [] # Nothing interesting
+	if terminals == 0:
+		return [('tanyao', 1)]
+	elif honours == 14:
+		return [('tsuiisou', 13)]
+	elif honours == 0:
+		return [('chinroutou', 13)]
+	else:
+		return [('honroutou', 2)]
+
+def _yaku_ryuuiisou(tiles):
+	# 23468s, hatsu
+	greens = [19, 20, 21, 23, 25, 32]
+	for x in tiles:
+		if x not in greens:
+			return []
+	return [('ryuuiisou', 13)]
+
+# Honitsu, Chinitsu
+# non-structural (mostly)
+def _yaku_suit(tiles):
+	suits = [0,0,0,0] # manzu, pinzu, souzu, honours... but it doesn't actually matter much
+	for tile in tiles:
+		suits[tile / 9] += 1
+	if suits[0:2].count(0) < 2:
+		return []
+	if suits[3] == 0:
+		return [('chinitsu', 6)] # TODO: do something about kuisagari
+		# Also, check for chuuren here?
+	else:
+		return [('honitsu', 3)] # also kuisagari
+
+def _yaku_chanta(calls, melds):
+	open = False
+	for meld in calls:
+		open = True
+		# Is this going to mess up the original object?
+		melds += meld['tiles']
+	# Could also check junchan
+	#if all(lambda y: any(lambda x: x in TERMINALS, y), melds):
+		# So apparently, True and False work as 1 and 0
+	#	return [('chanta', 1 + open)]
+	return []
+
+def _yaku_itsuu(calls, melds):
+	open = False
+	all_melds = melds + [call.tiles for call in calls]
+	all_melds.sort()
+
+	for start in 0, 1:
+		pass
+	return []
+	return [('itsuu', 1 + open)]
+
+def _yaku_yakuhai(calls, melds, round, seat):
+	yakuhai = [31, 32, 33] # dragons
+	yakuhai.extend(round+27)
+	yakuhai.extend(seat+27)
+
+	# Non-yakuhai stuff gets mixed in, but it doesn't matter
+	tiles = [x[0] for x in calls + melds]
+
+	yaku = 0
+	# Loop this way to catch double winds
+	for tile in yakuhai:
+		if group[0] in tiles:
+			yaku += 1
+
+	return [('yakuhai', 1)] * yaku
+
+def _yaku_kans(calls, melds, seat, tsumo):
+	if not calls:
+		return []
+	kans = 0
+	for call in calls:
+		if call.type == kan:
+			kans += 1
+	if kans == 3:
+		return [('sankantsu', 2)]
+	elif kans == 4:
+		return [('suukantsu', 4)]
+
+# final_tile is ???
+# tsumo is true/false
+def _count_score(calls, melds, round_wind, seat_wind, tsumo, final_tile):
+	yaku = []
+	if not calls and tsumo:
+		yaku.append(('menzen', 1))
+
+	fu = _count_fu(calls, melds, round_wind, seat_wind, tsumo, final_tile)
+
+	if tsumo and fu == 22 and not calls:
+		yaku.append(('pinfu', 1))
+	elif not tsumo and fu == 30 and not calls:
+		yaku.append(('pinfu', 1))
+
+	# Squish the data down to the list of tiles only
+	tiles = []
+	map(lambda x: tiles.extend(x['tiles']), calls)
+	map(lambda x: tiles.extend(x), melds)
+	# tanyao tsuuiisou chinroutou honroutou
+	yaku.extend(_yaku_terminals(tiles))
+	# ryuuiisou
+	yaku.extend(_yaku_ryuuiisou(tiles))
+	# chinitsu honitsu
+	yaku.extend(_yaku_suit(tiles))
+
+	# chanta
+	yaku.extend(_yaku_chanta(calls, melds))
+	# itsuu
+	yaku.extend(_yaku_itsuu(calls, melds))
+
+	return yaku
 
 # Brute force-ish method, try each tile and see if it completes the hand
 # This ignores tiles that are impossible (i.e. held in a kan or by opponents)
