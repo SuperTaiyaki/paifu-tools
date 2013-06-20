@@ -318,7 +318,6 @@ def _yaku_terminals(tiles):
 
 		if tile in TERMINALS: # Yes, implies the above
 			terminals += 1
-			print "Terminal %s" % tile
 		else:
 			middles += 1
 	print("Terminals: %d Middles: %d Honours: %d" % (terminals, middles, honours))
@@ -371,11 +370,19 @@ def _yaku_itsuu(calls, melds):
 	open = False
 	all_melds = melds + [call.tiles for call in calls]
 	all_melds.sort()
+	# Ugh, delete out the pair somehow...
 
 	for start in 0, 1:
-		pass
+		if all_melds[start][0] % 9 != 0:
+			continue
+		for x in range(3):
+			if all_melds[x][0] == all_melds[x][1]:
+				continue # mentsu OR PAIR
+		if all_melds[start][0] + 3 == all_melds[start+1][0] and\
+				all_melds[start][0] + 6 == all_melds[start+2][0]:
+					# kuisagari
+					return [('ittsuu', 1 + 0)]
 	return []
-	return [('itsuu', 1 + open)]
 
 def _yaku_yakuhai(calls, melds, round, seat):
 	yakuhai = [31, 32, 33] # dragons

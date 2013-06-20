@@ -15,8 +15,8 @@ Completion status:
 5: 'haitei', # check
 6: 'houtei', # check
 7: 'pinfu', 
-8: 'tanyao',
-9: 'iipeikou',
+*8: 'tanyao',
++9: 'iipeikou',
 
 10: 'ton', # jikaze
 11: 'nan',
@@ -36,10 +36,10 @@ Completion status:
 21: 'double riichi',
 22: 'chiitoitsu',
 23: 'chanta', #open, unconfirmed (chis not visible)
-24: 'ikkitsuukan', #open
-25: 'sanshokudoujun', # open?
++24: 'ikkitsuukan', #open
++25: 'sanshokudoujun', # open?
 
-26: 'sanshokudoukou',
++26: 'sanshokudoukou',
 27: 'sankantsuu',
 28: 'toitoihou',
 29: 'sanankou',
@@ -52,7 +52,7 @@ Completion status:
 34: 'honitsu', # closed
 
 # 6 han
-35: 'chinitsu', # open
++35: 'chinitsu', # open
 
 # yakuman sit in here
 
@@ -89,6 +89,20 @@ class TenhouYakuTest(unittest.TestCase):
 		# "23423423423455p" 
 		self.assertEqual(self.hand_yaku("23423423423455p", 'tanyao'), True)
 		self.assertEqual(self.hand_yaku("234234234234p11s", 'tanyao'), False)
+
+	def test_ikki(self):
+		self.assertEqual(self.hand_yaku("123456789m45699s", 'ittsuu'), True)
+	
+	def test_sanshoku(self):
+		self.assertEqual(self.hand_yaku("234m234789s23455p", 'sanshoku'), True)
+	def test_sanshokudoujun(self):
+		self.assertEqual(self.hand_yaku("444m444789p44411s", 'sanshokudoujun'), True)
+
+	def test_iipeikou(self):
+		self.assertEqual(self.hand_yaku("234234m333444s88p", 'iipeikou'), True)
+
+	def test_chinitsu(self):
+		self.assertEqual(self.hand_yaku("11223345656799s", 'chinitsu'), True)
 
 if __name__ == '__main__':
 	#if not hand_yaku("23423423423455p", 'tanyao'):
