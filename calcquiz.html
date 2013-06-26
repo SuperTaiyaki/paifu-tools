@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style type="text/css">
+      table {border: 1px solid black; color: white;}
+      td {border: 1px solid black;}
+      .highlight {background: #bbbbbb; color: #bbbbbb;}
+      h2 {color: black;}
+      th {color: black;}
+      .show {color: black;}
+    </style>
+    <!--<script type="text/javascript" src="scripts/jquery.js"> -->
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js">
+    </script>
+    <script type="text/javascript" language="javascript">
+
+      // Returns:
+      // not ron -> (dealer payment, non-dealer payment)
+      // ron -> (total payment, *)
+      function calculate(fu, han, oya, ron) {
+        han += 2;
+        var ret = [0, 0];
+        var base = Math.pow(2, han) * fu / 100.0;
+        if (base > 2000)
+          base = 2000;
+        if (oya) {
+          base *= 2;
+          if (ron) {
+            ret[1] = Math.ceil(3*base);
+          } else {
+            ret[1] = Math.ceil(base);
+          }
+        } else {
+          if (ron) {
+            ret[1] = Math.ceil(4*base);
+          } else {
+            ret[0] = Math.ceil(2*base);
+            ret[1] = Math.ceil(base);
+          }
+        }
+        ret[0] *= 100;
+        ret[1] *= 100;
+
+        return ret;
+      }
+
+
+      function seed() {
+        var fu = Math.floor(Math.random() * 10);
+        var han = Math.floor(Math.random() * 10);
+        var winds = ["東", "南", "西", "北"];
+        var wind = winds[Math.floor(Math.random() * 100) % 4]; //close enough to even...
+        var tsumo = Math.random() > 0.75 ? "tsumo" : "ron";
+        han %= 3; // don't care about large hands
+        han += 1;
+        // TODO: fix distributions... maybe mod fu so the higher stuff wraps down?
+        fu = fu % 7 + 1;
+        fu *= 10;
+        if (fu == 10) {
+          fu = 25;
+        }
+
+        $(".highlight").removeClass('highlight');
+
+        $("#input_oya").val("");
+        $("#input_ko").val("");
+
+        $("#fu_display").text(fu);
+        $("#han_display").text(han);
+        $("#wind_display").text(wind);
+        $("#ron_display").text(tsumo);
+
+        var calculated = calculate(fu, han, wind == "東", tsumo == "ron");
+        $("#answers").css("display", "none");
+        //$("#input_oya").val(calculated[0]);
+        //$("#input_ko").val(calculated[1]);
+
+        $("#answer_oya").text(calculated[0]);
+        $("#answer_ko").text(calculated[1]);
+
+        $("." + fu + "_fu").addClass('highlight');
+        $("." + han + "_" + (wind == "東" ? "o" : "k") + "_han").addClass('highlight');
+
+        return;
+      }
+
+      function checkInput() {
+        $("#answers").css("display", "block");
+        return false;
+      }
+      function init() {
+        $("td").click(function() {
+              $(this).toggleClass('show');
+            });
+        seed();
+      }
+
+      function showall() {
+        $("td").addClass('show');
+      }
+      function hideall() {
+        $("td").removeClass('show');
+      }
+      $(document).ready(init);
+    </script>
+  </head>
+
+  <body>
+    Fu: <span id="fu_display"></span><br />
+    Han: <span id="han_display"></span><br />
+    Wind: <span id="wind_display"></span><br />
+    <span id="ron_display"></span><br />
+
+    <form action="">
+    Oya: <input type="text" name="input_oya" id="input_oya"></input><br />
+    Ko:  <input type="text" name="input_ko" id="input_ko"></input><br />
+    <input type="submit" name="input_check" value="Check" onclick="return checkInput();"></input>
+    <div id="answers" style="display: none;">
+    Oya: <span id="answer_oya"></span>
+    Ko: <span id="answer_ko"></span><br />
+    <input type="submit" name="input_check" value="Next" onclick="seed();return false;"></input>
+    </div>
+    </form>
+<table>
+<tr>
+<th>4</th>
+<th>3</th>
+<th>2</th>
+<th>1</th>
+<th></th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
+<th>4</th>
+</tr>
+<tr>
+<tr class="20_fu">
+<td class="4_o_han"><b>7700</b><br />2600</td>
+<td class="3_o_han"><b>3900</b><br />1300</td>
+<td class="2_o_han"><b>2000</b><br />700</td>
+<td class="1_o_han"><b>1000</b><br />400</td>
+<td><h2>20</h2></td>
+<td class="1_k_han"><b>700</b><br />400/200</td>
+<td class="2_k_han"><b>1300</b><br />700/400</td>
+<td class="3_k_han"><b>2600</b><br />1300/700</td>
+<td class="4_k_han"><b>5200</b><br />2600/1300</td>
+</tr>
+<tr class="30_fu">
+<td class="4_o_han"><b>11600</b><br />3900</td>
+<td class="3_o_han"><b>5800</b><br />2000</td>
+<td class="2_o_han"><b>2900</b><br />1000</td>
+<td class="1_o_han"><b>1500</b><br />500</td>
+<td><h2>30</h2></td>
+<td class="1_k_han"><b>1000</b><br />500/300</td>
+<td class="2_k_han"><b>2000</b><br />1000/500</td>
+<td class="3_k_han"><b>3900</b><br />2000/1000</td>
+<td class="4_k_han"><b>7700</b><br />3900/2000</td>
+</tr>
+<tr class="40_fu">
+<td class="4_o_han"><b>12000</b><br />4000</td>
+<td class="3_o_han"><b>7700</b><br />2600</td>
+<td class="2_o_han"><b>3900</b><br />1300</td>
+<td class="1_o_han"><b>2000</b><br />700</td>
+<td><h2>40</h2></td>
+<td class="1_k_han"><b>1300</b><br />700/400</td>
+<td class="2_k_han"><b>2600</b><br />1300/700</td>
+<td class="3_k_han"><b>5200</b><br />2600/1300</td>
+<td class="4_k_han"><b>8000</b><br />4000/2000</td>
+</tr>
+<tr class="50_fu">
+<td class="4_o_han"><b>12000</b><br />4000</td>
+<td class="3_o_han"><b>9600</b><br />3200</td>
+<td class="2_o_han"><b>4800</b><br />1600</td>
+<td class="1_o_han"><b>2400</b><br />800</td>
+<td><h2>50</h2></td>
+<td class="1_k_han"><b>1600</b><br />800/400</td>
+<td class="2_k_han"><b>3200</b><br />1600/800</td>
+<td class="3_k_han"><b>6400</b><br />3200/1600</td>
+<td class="4_k_han"><b>8000</b><br />4000/2000</td>
+</tr>
+<tr class="60_fu">
+<td class="4_o_han"><b>12000</b><br />4000</td>
+<td class="3_o_han"><b>11600</b><br />3900</td>
+<td class="2_o_han"><b>5800</b><br />2000</td>
+<td class="1_o_han"><b>2900</b><br />1000</td>
+<td><h2>60</h2></td>
+<td class="1_k_han"><b>2000</b><br />1000/500</td>
+<td class="2_k_han"><b>3900</b><br />2000/1000</td>
+<td class="3_k_han"><b>7700</b><br />3900/2000</td>
+<td class="4_k_han"><b>8000</b><br />4000/2000</td>
+</tr>
+<tr class="70_fu">
+<td class="4_o_han"><b>12000</b><br />4000</td>
+<td class="3_o_han"><b>12000</b><br />4000</td>
+<td class="2_o_han"><b>6800</b><br />2300</td>
+<td class="1_o_han"><b>3400</b><br />1200</td>
+<td><h2>70</h2></td>
+<td class="1_k_han"><b>2300</b><br />1200/600</td>
+<td class="2_k_han"><b>4500</b><br />2300/1200</td>
+<td class="3_k_han"><b>8000</b><br />4000/2000</td>
+<td class="4_k_han"><b>8000</b><br />4000/2000</td>
+</tr>
+</table>
+<span onclick="showall()">Show all</span><br />
+<span onclick="hideall()">Hide all</span><br />
+
+  </body>
+
+</html>
