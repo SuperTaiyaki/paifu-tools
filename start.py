@@ -31,6 +31,13 @@ except Exception, e:
 target = '/cgi-bin/gamestate.py?hand=%s' % hand[6:]
 if score:
 	target += '&score=%d' % score
+hands = form.getfirst('hands', 0)
+try:
+	hands = int(hands)
+except Exception, e:
+	hands = 0
+if hands:
+	target += '&hands=%d' % hands
 
 print 'Status: 200 OK' # This seems to make the browser hide the real URL... good for hiding the score
 print 'Content-Type: text/plain'

@@ -33,6 +33,12 @@ try:
 except Exception, e:
 	score = 0
 
+hand_count = form.getfirst('hands', 0)
+try:
+	hand_count = int(hand_count)
+except Exception, e:
+	hand_count = 0
+
 validating = False
 if 'submit' in form:
 	validating = True
@@ -363,6 +369,7 @@ out.write("</div>") # row
 # Final hand
 out.write("<form method='post' action='/cgi-bin/gamestate.py'>\n")
 out.write("<input type='hidden' name='hand' value='%s'></input>\n" % hand_id)
+out.write("<input type='hidden' name='hands' value='%s'></input>\n" % hands)
 out.write("<input type='hidden' name='score' value='%d'></input>" % score)
 out.write("<div id='own_hand'>\n")
 out.write("<div class='row'>\n")
@@ -382,7 +389,7 @@ for i, tile in enumerate(sorted(hands[0])):
 out.write("</div><div class='row'>\n")
 if not validating:
 	for i, tile in enumerate(sorted(hands[0])):
-		out.write("<span><input name='tile_%d' id='tile_%d' type='checkbox' /></span>\n" % (tile, i))
+		out.write("<span><input name='tile_%d' id='tile_%d' type='checkbox' on/></span>\n" % (tile, i))
 	out.write("<input type='submit' name='submit' value='Submit' />\n")
 
 out.write("</div>\n") # row
@@ -422,6 +429,8 @@ if validating:
 	points = 0
 	fail = False
 	oldscore = score
+	oldhands = hand_count
+	hand_count += 1
 	for key in form.keys():
 		if key.find('tile_', 0, 5) == -1:
 			continue
@@ -431,18 +440,21 @@ if validating:
 		except Exception, e:
 			continue
 		if tile/4 in data['waits']:
-			points = score = 0
+			points = score = hand_count = 0
 			fail = True
 			break
 		points += 1
 	score += points
 	if fail:
-		out.write("</p><p>Dealt in. Score reset. Score: %d" % oldscore)
-	out.write("</p><p>Points this hand: %d<br />Total score: %d</p>" % (points,
-			score))
+		out.write("</p><p>Dealt in. Score reset. Score: %d Hands: %d" %
+				(oldscore, oldhands))
+	out.write("</p><p>Points this hand: %d<br />Total score: %d<br />Hands: %d</p>" % (points,
+		score, hand_count))
 	out.write("</p>\n")
 	out.write("<form action='/cgi-bin/start.py' method='post'>\n")
 	out.write("<input type='hidden' name='score' value='%d'></input>" % score)
+	out.write("<input type='hidden' name='hands' value='%d'></input>" %
+			hand_count)
 	out.write("<input type='submit' name='next' value='Next hand'></input>\n")
 	out.write("</form></div>\n")
 out.write("<p style='clear: left;'><br />Hand ID: <a href='/cgi-bin/gamestate.py?hand=%s'>%s</a></p>\n"
