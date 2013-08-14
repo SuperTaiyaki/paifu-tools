@@ -1,0 +1,26 @@
+This is a pile of scripts for working with Riichi mahjong stuff and Tenhou logs. APIs are currently not stable. Sorted
+roughly in order of usefulness:
+
+tenhou.py: Currently capable of stepping through tenhou .mjlog files (mostly), as well as a bunch of other currently
+incomplete mahjong-related features
+
+urldecode.py: Convert a replay URL to an mjlog URL.
+
+calcquiz.html: JS-based score drilling tool (just fu/han -> points calculations)
+
+tenhou_gui.py: Sort of working replay viewer. Uses the Kivy library to render.
+
+extract_hands.py: Used for generating my wait quiz (http://waitquiz.nfshost.com). Steps through logs and spits out a
+representation of the game state at the point when someone wins.
+
+gamestate.py: Builds the pages for the wait quiz. Messy HTML table representation of a table state. Works on the output
+of extract_hands.py.
+
+test.py: Basic verification tests (not proper unit tests)
+test_agari.py: Tests for the agari functions (python unittests)
+test_yaku.py: Tests for the yaku checking functions (python unittests)
+
+paifu.py: Will at some point generate a single-page visual log of a hand.
+
+score_quiz.py: Will at some point replace umaikelly's scoring quiz.
+

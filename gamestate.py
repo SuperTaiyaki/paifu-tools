@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 # coding=utf-8
+
+# Build a HTML page showing a game state. Format is the JSON output from extract_hands.
+
 import os
 import json
 import sys

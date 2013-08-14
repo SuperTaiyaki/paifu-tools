@@ -1,6 +1,9 @@
 #!/usr/bin/python 
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
+# Take a pile of mjlogs, write out the game state as someone wins.
+# Runs 4 processes simultaneously.
+
 import tenhou
 import sys
 import json

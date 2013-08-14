@@ -7,6 +7,8 @@ from kivy.graphics import RenderContext, Color, Rectangle, BindTexture, Scale, R
 from tenhou import *
 #from kivy.graphics.context_instructions import Scale, Rotate, Translate, PushMatrix, PopMatrix
 
+# Basic replay viewer, basically just verification of the main tenhou code.
+
 tilelist = []
 for x in range(0, 9):
 #        tilelist.append(Image(source="%sm.gif" % (x+1)))
